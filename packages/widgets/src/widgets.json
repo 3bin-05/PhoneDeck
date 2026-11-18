@@ -153,6 +153,30 @@
       "defaultSize": { "w": 4, "h": 2 },
       "minSize": { "w": 3, "h": 2 },
       "needs": [23, 31]
+    },
+    {
+      "id": "app-tile",
+      "name": "App Tile",
+      "category": "apps",
+      "defaultSize": { "w": 2, "h": 2 },
+      "minSize": { "w": 2, "h": 2 },
+      "needs": [32]
+    },
+    {
+      "id": "app-card",
+      "name": "App Card",
+      "category": "apps",
+      "defaultSize": { "w": 6, "h": 3 },
+      "minSize": { "w": 4, "h": 2 },
+      "needs": [32]
+    },
+    {
+      "id": "app-dock",
+      "name": "App Dock",
+      "category": "apps",
+      "defaultSize": { "w": 12, "h": 2 },
+      "minSize": { "w": 6, "h": 2 },
+      "needs": [32]
     }
   ]
 }

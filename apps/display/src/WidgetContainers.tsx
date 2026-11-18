@@ -19,6 +19,10 @@ import {
   VinylPlayerWidget,
   VolumeDialWidget,
   MediaSourceSwitcherWidget,
+  AppTileWidget,
+  AppCardWidget,
+  AppDockWidget,
+  type AppRuntimeData,
 } from '@phone-deck/widgets';
 import { useMetric, useEvents, useDeckStore } from './deckStore';
 import {
@@ -26,6 +30,7 @@ import {
   sendMediaSeek,
   sendMediaVolume,
   sendMediaSource,
+  sendAppAction,
 } from './useDeckBridge';
 
 /**
@@ -469,3 +474,118 @@ export const MediaSourceSwitcherContainer: React.FC = React.memo(() => {
   );
 });
 MediaSourceSwitcherContainer.displayName = 'MediaSourceSwitcherContainer';
+
+/**
+ * App Tile Container (Small 2x2 / 3x2)
+ */
+export const AppTileContainer: React.FC<{ appId: string; defaultName?: string; defaultIcon?: string }> = React.memo(
+  ({ appId, defaultName, defaultIcon }) => {
+    const raw = useMetric(FIELD_IDS.AppStates);
+    let app: AppRuntimeData = {
+      id: appId,
+      name: defaultName || appId,
+      running: false,
+      focused: false,
+      icon: defaultIcon || 'App',
+    };
+
+    if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed[appId]) {
+          app = parsed[appId];
+        }
+      } catch {}
+    }
+
+    return (
+      <AppTileWidget
+        app={app}
+        onAction={(id, act, ql) => sendAppAction(id, act, ql)}
+      />
+    );
+  }
+);
+AppTileContainer.displayName = 'AppTileContainer';
+
+/**
+ * App Card Container (Large 6x3)
+ */
+export const AppCardContainer: React.FC<{ appId: string; defaultName?: string; defaultIcon?: string }> = React.memo(
+  ({ appId, defaultName, defaultIcon }) => {
+    const raw = useMetric(FIELD_IDS.AppStates);
+    let app: AppRuntimeData = {
+      id: appId,
+      name: defaultName || (appId === 'vscode' ? 'Visual Studio Code' : appId === 'opera' ? 'Opera GX' : appId),
+      running: appId === 'vscode' || appId === 'opera',
+      focused: appId === 'vscode',
+      project: appId === 'vscode' ? 'PhoneDeck' : undefined,
+      file: appId === 'vscode' ? 'App.tsx' : undefined,
+      tab_title: appId === 'opera' ? 'YouTube Music' : undefined,
+      audio_active: appId === 'opera',
+      cpu_pct: appId === 'vscode' ? 1.4 : 2.1,
+      ram_bytes: appId === 'vscode' ? 420_000_000 : 650_000_000,
+      icon: defaultIcon || (appId === 'vscode' ? 'Code' : appId === 'opera' ? 'Flame' : 'App'),
+      quick_launches:
+        appId === 'vscode'
+          ? [
+              { id: 'proj', label: 'PhoneDeck', value: '.' },
+              { id: 'new', label: '+ Win', value: '-n' },
+            ]
+          : [
+              { id: 'search', label: 'Google', value: 'https://google.com' },
+              { id: 'ytm', label: 'YTM', value: 'https://music.youtube.com' },
+            ],
+    };
+
+    if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed[appId]) {
+          app = parsed[appId];
+        }
+      } catch {}
+    }
+
+    return (
+      <AppCardWidget
+        app={app}
+        onAction={(id, act, ql) => sendAppAction(id, act, ql)}
+      />
+    );
+  }
+);
+AppCardContainer.displayName = 'AppCardContainer';
+
+/**
+ * App Dock Container (Full-width row)
+ */
+export const AppDockContainer: React.FC = React.memo(() => {
+  const raw = useMetric(FIELD_IDS.AppStates);
+  let apps: AppRuntimeData[] = [
+    { id: 'vscode', name: 'VS Code', running: true, focused: true, icon: 'Code' },
+    { id: 'opera', name: 'Opera GX', running: true, focused: false, icon: 'Flame', audio_active: true },
+    { id: 'chrome', name: 'Chrome', running: false, focused: false, icon: 'Globe' },
+    { id: 'spotify', name: 'Spotify', running: true, focused: false, icon: 'Music' },
+    { id: 'terminal', name: 'Terminal', running: false, focused: false, icon: 'Terminal' },
+    { id: 'antigravity', name: 'Antigravity', running: true, focused: false, icon: 'Sparkles' },
+  ];
+
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        apps = Object.values(parsed);
+      }
+    } catch {}
+  }
+
+  return (
+    <AppDockWidget
+      apps={apps}
+      sortRunningFirst={true}
+      onAction={(id, act, ql) => sendAppAction(id, act, ql)}
+    />
+  );
+});
+AppDockContainer.displayName = 'AppDockContainer';

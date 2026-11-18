@@ -31,6 +31,7 @@ pub struct ServerState {
     pub shortcuts: Arc<crate::shortcuts::ShortcutManager>,
     pub rules: Arc<crate::rules::RulesEngine>,
     pub media: Arc<crate::media_session::MediaSessionManager>,
+    pub app_registry: Arc<crate::app_registry::AppRegistryManager>,
     pub agent_id: String,
 }
 
@@ -86,6 +87,18 @@ pub async fn start_wss_server(
                 } else {
                     StatusCode::NOT_FOUND.into_response()
                 }
+            }),
+        )
+        // Public LAN asset endpoint for app icons cache
+        .route(
+            "/api/app/icon/{icon_id}",
+            get(|axum::extract::Path(icon_id): axum::extract::Path<String>| async move {
+                let initial = icon_id.chars().next().unwrap_or('A').to_ascii_uppercase();
+                let svg = format!(
+                    r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48"><rect width="48" height="48" rx="10" fill="#181822"/><text x="24" y="29" fill="#7C5CFF" font-family="monospace" font-size="16" font-weight="bold" text-anchor="middle">{}</text></svg>"##,
+                    initial
+                );
+                ([(axum::http::header::CONTENT_TYPE, "image/svg+xml")], svg).into_response()
             }),
         )
         .with_state(state)
@@ -291,12 +304,14 @@ async fn handle_auth_and_stream_socket(mut socket: WebSocket, state: ServerState
     let hub_clone = state.telemetry_hub.clone();
     let agent_hub_clone = state.hub.clone();
     let media_clone = state.media.clone();
+    let app_registry_clone = state.app_registry.clone();
     let recv_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = receiver.next().await {
             match msg {
                 Message::Text(text) => {
                     if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
                         if let Some(dimmed) = v.get("dimmed").and_then(|d| d.as_bool()) {
+                            app_registry_clone.set_paused(dimmed);
                             if dimmed {
                                 // Dimmed / night mode: poll only Uptime (< 0.2 KB/s)
                                 hub_clone.update_client_subscriptions(vec![14]).await;
@@ -306,6 +321,8 @@ async fn handle_auth_and_stream_socket(mut socket: WebSocket, state: ServerState
                                     .update_client_subscriptions(vec![1, 2, 4, 5, 10, 11, 14])
                                     .await;
                             }
+                        } else if let Some(disp) = v.get("display_state").and_then(|s| s.as_str()) {
+                            app_registry_clone.set_paused(disp == "dark");
                         } else if let Some(subs) = v.get("subscribe").and_then(|s| s.as_array()) {
                             let list = subs
                                 .iter()
@@ -340,6 +357,25 @@ async fn handle_auth_and_stream_socket(mut socket: WebSocket, state: ServerState
                             media_clone.set_master_volume(vol as u8);
                         } else if let Some(pref) = v.get("media_source").and_then(|s| s.as_str()) {
                             media_clone.set_preferred_source(Some(pref.to_string()));
+                        } else if let Some(app_act) = v.get("app_action") {
+                            let app_id = app_act.get("app_id").and_then(|s| s.as_str()).unwrap_or("");
+                            let action = app_act.get("action").and_then(|s| s.as_str()).unwrap_or("");
+                            let ql = app_act.get("quick_launch_id").and_then(|s| s.as_str());
+                            let app_reg = app_registry_clone.clone();
+                            let app_id_owned = app_id.to_string();
+                            let action_owned = action.to_string();
+                            let ql_owned = ql.map(|s| s.to_string());
+                            tokio::spawn(async move {
+                                let _ = app_reg
+                                    .execute_action(&app_id_owned, &action_owned, ql_owned.as_deref())
+                                    .await;
+                            });
+                        } else if let Some(app_subs) = v.get("app_subscribe").and_then(|s| s.as_array()) {
+                            let list = app_subs
+                                .iter()
+                                .filter_map(|x| x.as_str().map(|s| s.to_string()))
+                                .collect::<Vec<_>>();
+                            app_registry_clone.update_subscriptions(list).await;
                         }
                     }
                 }

@@ -1,3 +1,4 @@
+pub mod app_registry;
 pub mod bridge;
 pub mod commands;
 pub mod discovery;
@@ -42,6 +43,7 @@ pub struct AgentAppState {
     pub shortcuts: Arc<ShortcutManager>,
     pub rules: Arc<RulesEngine>,
     pub media: Arc<media_session::MediaSessionManager>,
+    pub app_registry: Arc<app_registry::AppRegistryManager>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -87,6 +89,7 @@ pub fn run() {
             let shortcuts = Arc::new(ShortcutManager::new());
             let rules = Arc::new(RulesEngine::new());
             let media = media_session::MediaSessionManager::new(telemetry_hub.clone());
+            let app_registry = app_registry::AppRegistryManager::new(telemetry_hub.clone(), media.clone());
 
             // Forward hub events into rules engine
             let mut event_sub = hub.event_tx.subscribe();
@@ -119,6 +122,7 @@ pub fn run() {
                 shortcuts: shortcuts.clone(),
                 rules: rules.clone(),
                 media: media.clone(),
+                app_registry: app_registry.clone(),
             };
 
             // Start LAN-only WSS server (axum + rustls)
@@ -129,6 +133,7 @@ pub fn run() {
                 shortcuts,
                 rules,
                 media,
+                app_registry,
                 agent_id: agent_id.clone(),
             };
             let tls_acceptor = TlsAcceptor::from(tls_mgr.server_config.clone());
@@ -173,7 +178,14 @@ pub fn run() {
             commands::test_rule,
             commands::check_processes_running,
             commands::control_media,
-            commands::get_media_state
+            commands::get_media_state,
+            commands::get_app_registry,
+            commands::save_app_definition,
+            commands::delete_app_definition,
+            commands::get_running_processes,
+            commands::test_title_parser,
+            commands::execute_app_action,
+            commands::get_app_runtime_states
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

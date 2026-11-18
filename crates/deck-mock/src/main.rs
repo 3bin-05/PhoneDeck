@@ -87,6 +87,18 @@ async fn main() {
                 ([(axum::http::header::CONTENT_TYPE, "image/svg+xml")], svg)
             }),
         )
+        // Public LAN asset endpoint for app icons mock
+        .route(
+            "/api/app/icon/{icon_id}",
+            get(|axum::extract::Path(icon_id): axum::extract::Path<String>| async move {
+                let initial = icon_id.chars().next().unwrap_or('A').to_ascii_uppercase();
+                let svg = format!(
+                    r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48"><rect width="48" height="48" rx="10" fill="#181822"/><text x="24" y="29" fill="#7C5CFF" font-family="monospace" font-size="16" font-weight="bold" text-anchor="middle">{}</text></svg>"##,
+                    initial
+                );
+                ([(axum::http::header::CONTENT_TYPE, "image/svg+xml")], svg)
+            }),
+        )
         .with_state(state)
         .layer(CorsLayer::permissive());
 
@@ -191,6 +203,16 @@ async fn handle_socket(socket: WebSocket, tx: AppState) {
                             MEDIA_VOLUME_PCT.store(vol.min(100), Ordering::SeqCst);
                             MEDIA_DIRTY.store(true, Ordering::SeqCst);
                         }
+
+                        if let Some(app_act) = val.get("app_action") {
+                            let app_id = app_act.get("app_id").and_then(|s| s.as_str()).unwrap_or("");
+                            let action = app_act.get("action").and_then(|s| s.as_str()).unwrap_or("");
+                            println!("[deck-mock] Executed app action '{}' on '{}'", action, app_id);
+                        }
+
+                        if let Some(app_subs) = val.get("app_subscribe") {
+                            println!("[deck-mock] Subscribed app IDs: {:?}", app_subs);
+                        }
                     }
                 }
                 Message::Close(_) => {
@@ -290,6 +312,10 @@ async fn run_simulation_generator(tx: AppState) {
         curr_state.set(FieldId::MasterVolumePct, vol_pct as u64);
         curr_state.set(FieldId::MasterMute, mute);
         curr_state.set(FieldId::MediaSessionList, r#"["Spotify","Opera GX","Google Chrome","VLC Media Player"]"#);
+
+        // App Registry state (Part C)
+        let apps_json = r#"{"vscode":{"id":"vscode","name":"Visual Studio Code","running":true,"instances":1,"focused":true,"cpu_pct":1.4,"ram_bytes":420000000,"project":"PhoneDeck","file":"AppWidgets.tsx","unsaved":false,"icon":"Code","quick_launches":[{"id":"proj","label":"PhoneDeck","value":"."},{"id":"new","label":"+ Win","value":"-n"}]},"opera":{"id":"opera","name":"Opera GX","running":true,"instances":1,"focused":false,"cpu_pct":2.1,"ram_bytes":650000000,"tab_title":"YouTube Music","audio_active":true,"icon":"Flame","quick_launches":[{"id":"search","label":"Google","value":"https://google.com"},{"id":"ytm","label":"YTM","value":"https://music.youtube.com"}]},"antigravity":{"id":"antigravity","name":"Antigravity","running":true,"instances":1,"focused":false,"cpu_pct":0.8,"ram_bytes":180000000,"project":"PhoneDeck","icon":"Sparkles"}}"#;
+        curr_state.set(FieldId::AppStates, apps_json);
 
         let is_dark = IS_DARK.load(Ordering::SeqCst);
 

@@ -9,6 +9,7 @@ export * from './components/SystemWidgets';
 export * from './components/AgentInboxWidget';
 export * from './components/ShortcutGridWidget';
 export * from './components/MediaWidgets';
+export * from './components/AppWidgets';
 
 import {
   DigitalClockWidget,
@@ -36,11 +37,17 @@ import {
   VolumeDialWidget,
   MediaSourceSwitcherWidget,
 } from './components/MediaWidgets';
+import {
+  AppTileWidget,
+  AppCardWidget,
+  AppDockWidget,
+  type AppRuntimeData,
+} from './components/AppWidgets';
 
 export interface WidgetCatalogEntry {
   id: string;
   name: string;
-  category: 'time' | 'computer' | 'ai' | 'personal' | 'data' | 'media';
+  category: 'time' | 'computer' | 'ai' | 'personal' | 'data' | 'media' | 'apps';
   defaultSize: { w: number; h: number };
   minSize: { w: number; h: number };
   needs: number[];
@@ -317,6 +324,93 @@ export const WIDGET_REGISTRY: Record<string, (box: WidgetBox, ctx: WidgetContext
         sourceApp: (ctx.getMetric(23) as string) || 'Spotify',
         availableSessions: sessions,
         onSelectSource: (app) => ctx.sendAction && ctx.sendAction('media_source', { app }),
+      });
+    },
+  }),
+
+  'app-tile': (_box, ctx) => ({
+    needs: [32],
+    render: () => {
+      let appState: AppRuntimeData = {
+        id: 'vscode',
+        name: 'Visual Studio Code',
+        running: true,
+        focused: true,
+        icon: 'Code',
+      };
+      const raw = ctx.getMetric(32);
+      if (typeof raw === 'string') {
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') {
+            appState = (parsed.vscode || Object.values(parsed)[0] || appState) as AppRuntimeData;
+          }
+        } catch {}
+      }
+      return React.createElement(AppTileWidget, {
+        app: appState,
+        onAction: (id, act, ql) => ctx.sendAction && ctx.sendAction('app_action', { app_id: id, action: act, quick_launch_id: ql }),
+      });
+    },
+  }),
+
+  'app-card': (_box, ctx) => ({
+    needs: [32],
+    render: () => {
+      let appState: AppRuntimeData = {
+        id: 'vscode',
+        name: 'Visual Studio Code',
+        running: true,
+        focused: true,
+        project: 'PhoneDeck',
+        file: 'App.tsx',
+        unsaved: false,
+        cpu_pct: 1.4,
+        ram_bytes: 420_000_000,
+        icon: 'Code',
+        quick_launches: [
+          { id: 'proj', label: 'PhoneDeck', value: '.' },
+          { id: 'new', label: '+ Win', value: '-n' },
+        ],
+      };
+      const raw = ctx.getMetric(32);
+      if (typeof raw === 'string') {
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') {
+            appState = (parsed.vscode || Object.values(parsed)[0] || appState) as AppRuntimeData;
+          }
+        } catch {}
+      }
+      return React.createElement(AppCardWidget, {
+        app: appState,
+        onAction: (id, act, ql) => ctx.sendAction && ctx.sendAction('app_action', { app_id: id, action: act, quick_launch_id: ql }),
+      });
+    },
+  }),
+
+  'app-dock': (_box, ctx) => ({
+    needs: [32],
+    render: () => {
+      let appsList: AppRuntimeData[] = [
+        { id: 'vscode', name: 'VS Code', running: true, focused: true, icon: 'Code' },
+        { id: 'operagx', name: 'Opera GX', running: true, focused: false, icon: 'Flame', audio_active: true },
+        { id: 'chrome', name: 'Chrome', running: false, focused: false, icon: 'Globe' },
+        { id: 'spotify', name: 'Spotify', running: true, focused: false, icon: 'Music' },
+        { id: 'terminal', name: 'Terminal', running: false, focused: false, icon: 'Terminal' },
+      ];
+      const raw = ctx.getMetric(32);
+      if (typeof raw === 'string') {
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') {
+            appsList = Object.values(parsed);
+          }
+        } catch {}
+      }
+      return React.createElement(AppDockWidget, {
+        apps: appsList,
+        onAction: (id, act, ql) => ctx.sendAction && ctx.sendAction('app_action', { app_id: id, action: act, quick_launch_id: ql }),
       });
     },
   }),

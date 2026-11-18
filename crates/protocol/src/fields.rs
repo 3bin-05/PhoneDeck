@@ -56,6 +56,12 @@ pub enum FieldId {
     MasterVolumePct = 29,
     MasterMute = 30,
     MediaSessionList = 31,
+
+    // App state & registry (32..33)
+    /// JSON delta string of running/focused app runtime states
+    AppStates = 32,
+    /// Subscription list of currently visible app IDs
+    AppSubscriptions = 33,
 }
 
 impl FieldId {

@@ -77,6 +77,52 @@ const DEFAULT_METRICS: Record<number, number | string | boolean | null> = {
   29: 75, // Master Volume Pct
   30: false, // Master Mute
   31: '["Spotify", "Opera GX", "Google Chrome", "VLC Media Player"]', // Session List
+  32: JSON.stringify({
+    vscode: {
+      id: 'vscode',
+      name: 'Visual Studio Code',
+      running: true,
+      instances: 1,
+      focused: true,
+      cpu_pct: 1.4,
+      ram_bytes: 420_000_000,
+      project: 'PhoneDeck',
+      file: 'App.tsx',
+      unsaved: false,
+      icon: 'Code',
+      quick_launches: [
+        { id: 'proj', label: 'PhoneDeck', value: '.' },
+        { id: 'new', label: '+ Win', value: '-n' },
+      ],
+    },
+    opera: {
+      id: 'opera',
+      name: 'Opera GX',
+      running: true,
+      instances: 1,
+      focused: false,
+      cpu_pct: 2.1,
+      ram_bytes: 650_000_000,
+      tab_title: 'YouTube Music',
+      audio_active: true,
+      icon: 'Flame',
+      quick_launches: [
+        { id: 'search', label: 'Google', value: 'https://google.com' },
+        { id: 'ytm', label: 'YTM', value: 'https://music.youtube.com' },
+      ],
+    },
+    antigravity: {
+      id: 'antigravity',
+      name: 'Antigravity',
+      running: true,
+      instances: 1,
+      focused: false,
+      cpu_pct: 0.8,
+      ram_bytes: 180_000_000,
+      project: 'PhoneDeck',
+      icon: 'Sparkles',
+    },
+  }),
 };
 
 export const useDeckStore = create<DeckState>((set) => ({

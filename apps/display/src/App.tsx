@@ -42,9 +42,7 @@ import {
   CpuHistoryContainer,
   MemoryDisksContainer,
   NetworkIoContainer,
-  TopProcessesContainer,
   SystemUptimeContainer,
-  PhoneStatusContainer,
   AgentInboxContainer,
   ShortcutGridContainer,
   NowPlayingLargeContainer,
@@ -52,6 +50,8 @@ import {
   VinylPlayerContainer,
   VolumeDialContainer,
   MediaSourceSwitcherContainer,
+  AppCardContainer,
+  AppDockContainer,
 } from './WidgetContainers';
 
 interface ConnectionStatus {
@@ -427,25 +427,30 @@ export default function App() {
               }}
               className="w-full h-full grid grid-cols-12 grid-rows-6 gap-2"
             >
-              {/* PAGE 2: DEV & PROCESSES */}
-              {/* AI Agent Inbox (col 1..6, row 1..3) */}
+              {/* PAGE 2: DEV, APPS & PROCESSES */}
+              {/* Visual Studio Code App Card (col 1..6, row 1..3) */}
               <div className="col-span-6 row-span-3">
+                <AppCardContainer appId="vscode" defaultName="Visual Studio Code" defaultIcon="Code" />
+              </div>
+
+              {/* Opera GX App Card (col 7..12, row 1..3) */}
+              <div className="col-span-6 row-span-3">
+                <AppCardContainer appId="opera" defaultName="Opera GX" defaultIcon="Flame" />
+              </div>
+
+              {/* App Dock (col 1..12, row 4) */}
+              <div className="col-span-12 row-span-1">
+                <AppDockContainer />
+              </div>
+
+              {/* AI Agent Inbox (col 1..7, row 5..6) */}
+              <div className="col-span-7 row-span-2">
                 <AgentInboxContainer />
               </div>
 
-              {/* Custom Shortcuts Grid (col 7..12, row 1..3) */}
-              <div className="col-span-6 row-span-3">
+              {/* Custom Shortcuts Grid (col 8..12, row 5..6) */}
+              <div className="col-span-5 row-span-2">
                 <ShortcutGridContainer />
-              </div>
-
-              {/* Top Processes (col 1..7, row 4..6) */}
-              <div className="col-span-7 row-span-3">
-                <TopProcessesContainer />
-              </div>
-
-              {/* Phone Status (col 8..12, row 4..6) */}
-              <div className="col-span-5 row-span-3">
-                <PhoneStatusContainer />
               </div>
             </motion.div>
           )}
@@ -748,6 +753,72 @@ export default function App() {
                   onChange={(e) => sendMediaVolume(parseInt(e.target.value))}
                   className="w-full accent-[#00E599] h-1.5 bg-white/[0.08] rounded cursor-pointer"
                 />
+              </div>
+            </div>
+
+            {/* Part C: App Registry Dev Controls */}
+            <div className="pt-2 border-t border-white/[0.08] space-y-2">
+              <div className="flex justify-between items-center text-[10px] uppercase font-semibold text-[#7C5CFF]">
+                <span>App State Simulation</span>
+                <span className="text-zinc-400 font-mono">VS Code / Opera / Antigravity</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  onClick={() => {
+                    const currentRaw = useDeckStore.getState().metrics[32];
+                    let parsed: any = {};
+                    try { parsed = JSON.parse(String(currentRaw)); } catch {}
+                    const vscode = parsed.vscode || {};
+                    parsed.vscode = { ...vscode, focused: !vscode.focused, running: true };
+                    useDeckStore.getState().applyMetricBatch({ 32: JSON.stringify(parsed) });
+                  }}
+                  className="px-2 py-1 bg-white/[0.04] hover:bg-white/[0.08] text-white rounded text-[10px] font-mono cursor-pointer"
+                >
+                  Toggle VS Code Focus
+                </button>
+                <button
+                  onClick={() => {
+                    const currentRaw = useDeckStore.getState().metrics[32];
+                    let parsed: any = {};
+                    try { parsed = JSON.parse(String(currentRaw)); } catch {}
+                    const vscode = parsed.vscode || {};
+                    parsed.vscode = { ...vscode, unsaved: !vscode.unsaved };
+                    useDeckStore.getState().applyMetricBatch({ 32: JSON.stringify(parsed) });
+                  }}
+                  className="px-2 py-1 bg-white/[0.04] hover:bg-white/[0.08] text-amber-300 rounded text-[10px] font-mono cursor-pointer"
+                >
+                  ● Toggle Unsaved File
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  onClick={() => {
+                    const currentRaw = useDeckStore.getState().metrics[32];
+                    let parsed: any = {};
+                    try { parsed = JSON.parse(String(currentRaw)); } catch {}
+                    const opera = parsed.opera || {};
+                    parsed.opera = { ...opera, audio_active: !opera.audio_active, running: true };
+                    useDeckStore.getState().applyMetricBatch({ 32: JSON.stringify(parsed) });
+                  }}
+                  className="px-2 py-1 bg-white/[0.04] hover:bg-white/[0.08] text-[#00E599] rounded text-[10px] font-mono cursor-pointer"
+                >
+                  🔊 Toggle Opera Audio
+                </button>
+                <button
+                  onClick={() => {
+                    const currentRaw = useDeckStore.getState().metrics[32];
+                    let parsed: any = {};
+                    try { parsed = JSON.parse(String(currentRaw)); } catch {}
+                    const agy = parsed.antigravity || {};
+                    parsed.antigravity = { ...agy, running: !agy.running, focused: !agy.running };
+                    useDeckStore.getState().applyMetricBatch({ 32: JSON.stringify(parsed) });
+                  }}
+                  className="px-2 py-1 bg-white/[0.04] hover:bg-white/[0.08] text-[#7C5CFF] rounded text-[10px] font-mono cursor-pointer"
+                >
+                  ✨ Toggle Antigravity
+                </button>
               </div>
             </div>
           </div>

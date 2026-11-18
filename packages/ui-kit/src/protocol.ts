@@ -32,7 +32,9 @@ export type FieldId =
   | "MediaPalette"
   | "MasterVolumePct"
   | "MasterMute"
-  | "MediaSessionList";
+  | "MediaSessionList"
+  | "AppStates"
+  | "AppSubscriptions";
 
 export const FIELD_IDS = {
   CpuTotal: 1,
@@ -66,6 +68,8 @@ export const FIELD_IDS = {
   MasterVolumePct: 29,
   MasterMute: 30,
   MediaSessionList: 31,
+  AppStates: 32,
+  AppSubscriptions: 33,
 } as const;
 
 export type MetricValue = null | number | boolean | string;

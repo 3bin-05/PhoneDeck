@@ -3,6 +3,7 @@ import { LayoutEditor } from './editor/LayoutEditor';
 import { ShortcutsManager } from './editor/ShortcutsManager';
 import { RulesManager } from './editor/RulesManager';
 import { AmbientSettings } from './editor/AmbientSettings';
+import { AppsManager } from './editor/AppsManager';
 import {
   QrCode,
   Monitor,
@@ -20,6 +21,7 @@ import {
   Command,
   Sparkles,
   Moon,
+  AppWindow,
 } from 'lucide-react';
 
 interface PairingStatus {
@@ -41,7 +43,7 @@ interface PairedDevice {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<
-    'status' | 'devices' | 'editor' | 'shortcuts' | 'rules' | 'ambient' | 'settings'
+    'status' | 'devices' | 'editor' | 'apps' | 'shortcuts' | 'rules' | 'ambient' | 'settings'
   >('status');
   const [pairingStatus, setPairingStatus] = useState<PairingStatus | null>(null);
   const [countdown, setCountdown] = useState<number>(120);
@@ -187,6 +189,7 @@ export default function App() {
             { id: 'status', label: 'Monitor', icon: Monitor },
             { id: 'devices', label: 'Pairing & Devices', icon: QrCode },
             { id: 'editor', label: 'Layout Editor', icon: SlidersHorizontal },
+            { id: 'apps', label: 'Apps', icon: AppWindow },
             { id: 'shortcuts', label: 'Shortcuts', icon: Command },
             { id: 'rules', label: 'Rules', icon: Sparkles },
             { id: 'ambient', label: 'Ambient', icon: Moon },
@@ -443,6 +446,7 @@ export default function App() {
         )}
 
         {activeTab === 'editor' && <LayoutEditor />}
+        {activeTab === 'apps' && <AppsManager />}
         {activeTab === 'shortcuts' && <ShortcutsManager />}
         {activeTab === 'rules' && <RulesManager />}
         {activeTab === 'ambient' && <AmbientSettings />}

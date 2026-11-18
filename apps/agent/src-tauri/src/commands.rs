@@ -199,3 +199,77 @@ pub fn get_media_state(state: State<'_, AgentAppState>) -> Result<serde_json::Va
         "available_sessions": snap.available_sessions,
     }))
 }
+
+#[tauri::command]
+pub async fn get_app_registry(
+    state: State<'_, AgentAppState>,
+) -> Result<Vec<crate::app_registry::AppDefinition>, String> {
+    Ok(state.app_registry.get_all_apps().await)
+}
+
+#[tauri::command]
+pub async fn save_app_definition(
+    state: State<'_, AgentAppState>,
+    app: crate::app_registry::AppDefinition,
+) -> Result<(), String> {
+    state.app_registry.add_or_update_app(app).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn delete_app_definition(
+    state: State<'_, AgentAppState>,
+    id: String,
+) -> Result<bool, String> {
+    Ok(state.app_registry.remove_app(&id).await)
+}
+
+#[tauri::command]
+pub async fn get_running_processes(
+    state: State<'_, AgentAppState>,
+) -> Result<Vec<crate::app_registry::RunningProcessInfo>, String> {
+    Ok(state.app_registry.detect_running_processes().await)
+}
+
+#[tauri::command]
+pub fn test_title_parser(
+    raw_title: String,
+    parser_type: String,
+    template: Option<String>,
+    strip_suffix: Option<String>,
+) -> serde_json::Value {
+    let cfg = Some(crate::app_registry::TitleParserConfig {
+        parser_type,
+        template,
+        strip_suffix,
+    });
+    let (project, file, unsaved, tab_title, audio_active) =
+        crate::app_registry::AppRegistryManager::parse_title(&raw_title, &cfg, false);
+    serde_json::json!({
+        "project": project,
+        "file": file,
+        "unsaved": unsaved,
+        "tab_title": tab_title,
+        "audio_active": audio_active,
+    })
+}
+
+#[tauri::command]
+pub async fn execute_app_action(
+    state: State<'_, AgentAppState>,
+    app_id: String,
+    action: String,
+    quick_launch_id: Option<String>,
+) -> Result<String, String> {
+    state
+        .app_registry
+        .execute_action(&app_id, &action, quick_launch_id.as_deref())
+        .await
+}
+
+#[tauri::command]
+pub async fn get_app_runtime_states(
+    state: State<'_, AgentAppState>,
+) -> Result<HashMap<String, crate::app_registry::AppRuntimeState>, String> {
+    Ok(state.app_registry.get_runtime_states().await)
+}

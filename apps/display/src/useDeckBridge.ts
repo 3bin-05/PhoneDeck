@@ -33,6 +33,24 @@ export function sendMediaSource(sourceApp: string) {
   sendDeckMessage({ media_source: sourceApp });
 }
 
+export function sendAppAction(
+  appId: string,
+  action: string,
+  quickLaunchId?: string
+) {
+  sendDeckMessage({
+    app_action: {
+      app_id: appId,
+      action,
+      quick_launch_id: quickLaunchId,
+    },
+  });
+}
+
+export function sendAppSubscribe(appIds: string[]) {
+  sendDeckMessage({ app_subscribe: appIds });
+}
+
 export function useDeckBridge(wsUrl: string = 'ws://127.0.0.1:8765/ws') {
   const socketRef = useRef<WebSocket | null>(null);
   const pendingUpdatesRef = useRef<Record<number, any>>({});
