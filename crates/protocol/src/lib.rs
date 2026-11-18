@@ -3,11 +3,18 @@
 //! Provides the MessagePack envelope, integer field-ID dictionary,
 //! delta encoder with dead-band filtering, and shared event contracts.
 
+pub mod crypto;
 pub mod delta;
 pub mod envelope;
 pub mod events;
 pub mod fields;
 
+pub use crypto::{
+    compute_cert_fingerprint, create_auth_proof, derive_client_key, derive_stored_key,
+    generate_device_key, generate_nonce, generate_pairing_token, generate_random_bytes,
+    subtle_eq, verify_auth_proof, verify_cert_fingerprint, AuthChallenge, AuthResponse, AuthResult,
+    PairRequest, PairResponse, PairUri, PAIRING_SCHEME,
+};
 pub use delta::{
     apply_delta, compute_delta, compute_raw_delta, DeadbandConfig, TelemetryDelta, TelemetryState,
 };

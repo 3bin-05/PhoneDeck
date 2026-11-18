@@ -1,14 +1,112 @@
 import { useState, useEffect } from 'react';
-import { Cpu, HardDrive, Wifi, Sparkles, BatteryCharging, Activity, Radio, AlertTriangle } from 'lucide-react';
+import {
+  Cpu,
+  HardDrive,
+  Wifi,
+  Sparkles,
+  BatteryCharging,
+  Activity,
+  Radio,
+  AlertTriangle,
+  QrCode,
+  Shield,
+  X,
+  Check,
+} from 'lucide-react';
 import { useDeckSocket } from './useDeckSocket';
+
+interface ConnectionStatus {
+  paired: boolean;
+  connected: boolean;
+  agent_id?: string | null;
+  active_host?: string | null;
+  error?: string | null;
+}
 
 export default function App() {
   const [time, setTime] = useState('');
   const [isBrowserFrame, setIsBrowserFrame] = useState(false);
+  const [showPairModal, setShowPairModal] = useState(false);
+  const [pairUriInput, setPairUriInput] = useState('');
+  const [pairingLoading, setPairingLoading] = useState(false);
+  const [pairingMessage, setPairingMessage] = useState<string | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
+    paired: false,
+    connected: false,
+  });
+
   const { connected, telemetry, latestEvent, bytesPerSec } = useDeckSocket();
+  const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+  const fetchStatus = async () => {
+    if (isTauri) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const res = await invoke<ConnectionStatus>('get_connection_status');
+        setConnectionStatus(res);
+      } catch (err) {
+        console.error('Fetch status error:', err);
+      }
+    }
+  };
+
+  const handlePair = async () => {
+    if (!pairUriInput.trim()) return;
+    setPairingLoading(true);
+    setPairingMessage(null);
+
+    if (isTauri) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const res = await invoke<ConnectionStatus>('pair_with_uri', {
+          pairUri: pairUriInput.trim(),
+          deviceName: 'Phone Deck Display (Browser/Mobile)',
+        });
+        setConnectionStatus(res);
+        setPairingMessage('Pairing successful! Encrypted TLS link established.');
+        setTimeout(() => setShowPairModal(false), 1500);
+      } catch (err) {
+        setPairingMessage(`Pairing failed: ${String(err)}`);
+      }
+    } else {
+      // Browser preview simulated pairing
+      if (pairUriInput.startsWith('phonedeck://pair')) {
+        setConnectionStatus({
+          paired: true,
+          connected: true,
+          agent_id: 'phone-deck-pc',
+          active_host: '127.0.0.1:8766',
+        });
+        setPairingMessage('Simulated pairing successful! Pinned fingerprint verified.');
+        setTimeout(() => setShowPairModal(false), 1500);
+      } else {
+        setPairingMessage('Invalid pairing URI. Expected phonedeck://pair?...');
+      }
+    }
+    setPairingLoading(false);
+  };
+
+  const handleUnpair = async () => {
+    if (isTauri) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('unpair_device');
+        setConnectionStatus({ paired: false, connected: false });
+        setPairingMessage('Device unpaired successfully.');
+      } catch (err) {
+        console.error('Unpair error:', err);
+      }
+    } else {
+      setConnectionStatus({ paired: false, connected: false });
+      setPairingMessage('Device unpaired.');
+    }
+  };
 
   useEffect(() => {
-    // Detect if running inside desktop browser (simulate 780x360 frame) vs native fullscreen mobile
+    fetchStatus();
+  }, []);
+
+  useEffect(() => {
     const checkViewport = () => {
       setIsBrowserFrame(window.innerWidth > 850);
     };
@@ -218,7 +316,7 @@ export default function App() {
               ))
             ) : (
               <span className="text-[10px] font-mono text-[#71717A]">
-                deck-mock linked
+                {connectionStatus.paired ? 'TLS Pinned Link' : 'deck-mock linked'}
               </span>
             )}
           </div>
@@ -234,16 +332,85 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-2">
-          {['Dev', 'Media', 'Rules', 'Lock'].map((tile) => (
+          {['Dev', 'Media', 'Rules'].map((tile) => (
             <button
               key={tile}
-              className="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-[10px] font-mono text-[#EDEDF2] transition-all"
+              className="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-[10px] font-mono text-[#EDEDF2] transition-all cursor-pointer"
             >
               {tile}
             </button>
           ))}
+          <button
+            onClick={() => setShowPairModal(true)}
+            className="px-2.5 py-1 rounded-lg bg-[#7C5CFF]/20 hover:bg-[#7C5CFF]/30 border border-[#7C5CFF]/40 text-[10px] font-mono text-[#7C5CFF] flex items-center gap-1 transition-all cursor-pointer"
+          >
+            <QrCode className="w-3 h-3" />
+            <span>Pair</span>
+          </button>
         </div>
       </div>
+
+      {/* Pairing Modal Overlay */}
+      {showPairModal && (
+        <div className="absolute inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md p-5 rounded-2xl bg-[#09090D] border border-white/[0.1] shadow-[0_0_40px_rgba(0,0,0,0.9)] space-y-4">
+            <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
+              <div className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-[#7C5CFF]" />
+                <span className="text-xs font-semibold text-[#EDEDF2]">
+                  Pair Display with PC Agent
+                </span>
+              </div>
+              <button
+                onClick={() => setShowPairModal(false)}
+                className="p-1 rounded-lg hover:bg-white/[0.08] text-[#71717A] hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-[11px] text-[#71717A] leading-relaxed">
+                Paste the pairing URI from your Agent app or scan the QR code. All communication is authenticated over pinned TLS.
+              </p>
+
+              <input
+                type="text"
+                placeholder="phonedeck://pair?h=...&t=..."
+                value={pairUriInput}
+                onChange={(e) => setPairUriInput(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-xs font-mono text-[#EDEDF2] placeholder-[#71717A] focus:outline-none focus:border-[#7C5CFF]"
+              />
+
+              {pairingMessage && (
+                <div className="text-[10px] font-mono p-2 rounded-lg bg-white/[0.03] border border-white/[0.06] text-[#EDEDF2]">
+                  {pairingMessage}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  onClick={handlePair}
+                  disabled={pairingLoading || !pairUriInput.trim()}
+                  className="flex-1 py-2 rounded-xl bg-[#7C5CFF] hover:bg-[#6C4CEF] text-white text-xs font-semibold disabled:opacity-50 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{pairingLoading ? 'Verifying TLS...' : 'Pair Device'}</span>
+                </button>
+
+                {connectionStatus.paired && (
+                  <button
+                    onClick={handleUnpair}
+                    className="px-3 py-2 rounded-xl bg-white/[0.06] hover:bg-[#FF3B5C]/20 text-[#FF3B5C] text-xs font-semibold transition-all cursor-pointer"
+                  >
+                    Unpair
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 

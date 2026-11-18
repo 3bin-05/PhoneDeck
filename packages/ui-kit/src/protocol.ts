@@ -78,3 +78,45 @@ export interface AgentEvent {
 }
 
 export type ProtocolEnvelope<T> = [channel: number, seq: number, payload: T];
+
+export interface PairUri {
+  hosts: string[];
+  port: number;
+  token: string;
+  fingerprint: string;
+  agent_id: string;
+}
+
+export interface PairRequest {
+  token: string;
+  device_id: string;
+  device_name: string;
+}
+
+export interface PairResponse {
+  success: boolean;
+  device_key?: string | null;
+  error?: string | null;
+}
+
+export interface AuthChallenge {
+  nonce: string;
+}
+
+export interface AuthResponse {
+  device_id: string;
+  proof: string;
+}
+
+export interface AuthResult {
+  success: boolean;
+  error?: string | null;
+}
+
+export interface PairedDevice {
+  device_id: string;
+  device_name: string;
+  paired_at: number;
+  last_seen: number;
+}
+
