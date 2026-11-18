@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { LayoutEditor } from './editor/LayoutEditor';
 import {
   QrCode,
   Monitor,
@@ -204,7 +205,11 @@ export default function App() {
       </header>
 
       {/* Main Content View */}
-      <main className="flex-1 p-6 overflow-y-auto">
+      <main
+        className={`flex-1 ${
+          activeTab === 'editor' ? 'p-0 overflow-hidden' : 'p-6 overflow-y-auto'
+        }`}
+      >
         {activeTab === 'status' && (
           <div className="max-w-5xl mx-auto space-y-6">
             {/* Live Status Row */}
@@ -426,15 +431,7 @@ export default function App() {
           </div>
         )}
 
-        {activeTab === 'editor' && (
-          <div className="max-w-4xl mx-auto p-8 rounded-2xl bg-[#08080C] border border-white/[0.08] text-center space-y-3">
-            <SlidersHorizontal className="w-8 h-8 text-[#7C5CFF] mx-auto" />
-            <h3 className="text-sm font-semibold">Visual Layout Editor</h3>
-            <p className="text-xs text-[#71717A]">
-              Phase 5 feature: 12x6 Deck grid editor with drag-and-drop widget placement.
-            </p>
-          </div>
-        )}
+        {activeTab === 'editor' && <LayoutEditor />}
 
         {activeTab === 'settings' && (
           <div className="max-w-4xl mx-auto p-8 rounded-2xl bg-[#08080C] border border-white/[0.08] space-y-4">

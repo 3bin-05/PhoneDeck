@@ -1,6 +1,12 @@
 import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import type { AgentEvent } from '@phone-deck/ui-kit';
+import {
+  type ThemeConfig,
+  VOID_THEME,
+  DEFAULT_DECK_CONFIG,
+  type DeckConfiguration,
+} from '@phone-deck/theme-engine';
 
 export interface PerformanceStats {
   throughputBps: number;
@@ -20,8 +26,12 @@ export interface DeckState {
   volumeKeyPaging: boolean;
   connected: boolean;
   stats: PerformanceStats;
+  theme: ThemeConfig;
+  deckConfig: DeckConfiguration;
 
   // Actions
+  setTheme: (theme: ThemeConfig) => void;
+  setDeckConfig: (config: DeckConfiguration) => void;
   applyMetricBatch: (updates: Record<number, any>) => void;
   addEvent: (event: AgentEvent) => void;
   removeEvent: (eventId: string) => void;
@@ -89,6 +99,16 @@ export const useDeckStore = create<DeckState>((set) => ({
     tickRateHz: 2.0,
     frameTimeMs: 3.2,
   },
+  theme: VOID_THEME,
+  deckConfig: DEFAULT_DECK_CONFIG,
+
+  setTheme: (theme) => set({ theme }),
+  setDeckConfig: (deckConfig) =>
+    set({
+      deckConfig,
+      theme: deckConfig.theme,
+      totalPages: deckConfig.pages.length,
+    }),
 
   applyMetricBatch: (updates) =>
     set((state) => {
@@ -183,4 +203,12 @@ export function useStats() {
 
 export function useEvents() {
   return useDeckStore((state) => state.events);
+}
+
+export function useTheme() {
+  return useDeckStore((state) => state.theme);
+}
+
+export function useDeckConfig() {
+  return useDeckStore((state) => state.deckConfig);
 }

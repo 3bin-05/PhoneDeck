@@ -17,7 +17,9 @@ import {
   useActivePage,
   useIsDimmed,
   useStats,
+  useTheme,
 } from './deckStore';
+import { BUILTIN_THEMES } from '@phone-deck/theme-engine';
 import { useDeckBridge } from './useDeckBridge';
 import {
   DigitalClockContainer,
@@ -53,6 +55,7 @@ export default function App() {
   const isDimmed = useIsDimmed();
   const connected = useDeckStore((s) => s.connected);
   const stats = useStats();
+  const theme = useTheme();
 
   const [showBudgetHud, setShowBudgetHud] = useState(false);
   const [showPairModal, setShowPairModal] = useState(false);
@@ -153,17 +156,49 @@ export default function App() {
   }
 
   return (
-    <div className="w-full h-screen bg-[#000000] text-[#EDEDF2] flex flex-col select-none overflow-hidden font-sans">
+    <div
+      style={{
+        backgroundColor: theme.palette.surface,
+        color: theme.palette.text,
+      }}
+      className="w-full h-screen flex flex-col select-none overflow-hidden font-sans"
+    >
       {/* Top Header Bar */}
-      <header className="h-10 px-4 border-b border-white/[0.06] flex items-center justify-between text-xs font-mono shrink-0 bg-[#000000]/90 z-20">
+      <header
+        style={{
+          backgroundColor: `${theme.palette.surface}F0`,
+          borderColor: theme.palette.border,
+        }}
+        className="h-10 px-4 border-b flex items-center justify-between text-xs font-mono shrink-0 z-20"
+      >
         <div className="flex items-center space-x-2">
-          <div className="w-2.5 h-2.5 rounded-full bg-[#7C5CFF] shadow-[0_0_8px_#7C5CFF]" />
-          <span className="font-semibold tracking-wider text-[#EDEDF2]">
+          <div
+            className="w-2.5 h-2.5 rounded-full"
+            style={{
+              backgroundColor: theme.palette.accent,
+              boxShadow: `0 0 8px ${theme.palette.accent}`,
+            }}
+          />
+          <span className="font-semibold tracking-wider">
             PHONE DECK
           </span>
-          <span className="text-[10px] text-[#71717A] px-1.5 py-0.5 rounded bg-white/[0.04]">
-            VOID
-          </span>
+          <button
+            onClick={() => {
+              const themes = Object.values(BUILTIN_THEMES);
+              const currIdx = themes.findIndex((t) => t.name === theme.name);
+              const nextTheme = themes[(currIdx + 1) % themes.length];
+              useDeckStore.getState().setTheme(nextTheme);
+            }}
+            className="text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded transition-all cursor-pointer"
+            style={{
+              backgroundColor: `${theme.palette.accent}20`,
+              color: theme.palette.accent,
+              border: `1px solid ${theme.palette.accent}40`,
+            }}
+            title="Click to cycle theme (Void / Paper / Neon Grid)"
+          >
+            {theme.name}
+          </button>
         </div>
 
         {/* Center Page Title */}
@@ -376,10 +411,16 @@ export default function App() {
       </main>
 
       {/* Bottom Footer & Page Dots */}
-      <footer className="h-6 px-4 border-t border-white/[0.06] flex items-center justify-between text-[10px] font-mono text-[#71717A] shrink-0 bg-[#000000]">
+      <footer
+        style={{
+          backgroundColor: theme.palette.surface,
+          borderColor: theme.palette.border,
+        }}
+        className="h-6 px-4 border-t flex items-center justify-between text-[10px] font-mono text-[#71717A] shrink-0"
+      >
         <div className="flex items-center space-x-2">
           <span className="flex items-center space-x-1">
-            <Volume2 className="w-3 h-3 text-[#7C5CFF]" />
+            <Volume2 className="w-3 h-3" style={{ color: theme.palette.accent }} />
             <span>VOL KEYS: PAGE</span>
           </span>
           <span>·</span>
@@ -392,10 +433,14 @@ export default function App() {
             <button
               key={idx}
               onClick={() => useDeckStore.getState().setPage(idx)}
+              style={{
+                backgroundColor:
+                  activePage === idx
+                    ? theme.palette.accent
+                    : 'rgba(255, 255, 255, 0.2)',
+              }}
               className={`h-1.5 rounded-full transition-all duration-300 ${
-                activePage === idx
-                  ? 'w-6 bg-[#7C5CFF]'
-                  : 'w-1.5 bg-white/[0.2] hover:bg-white/[0.4]'
+                activePage === idx ? 'w-6' : 'w-1.5 hover:bg-white/[0.4]'
               }`}
             />
           ))}
