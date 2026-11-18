@@ -5,6 +5,19 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+fn create_command<P: AsRef<std::ffi::OsStr>>(program: P) -> Command {
+    let mut cmd = Command::new(program);
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct AdbStatus {
     pub available: bool,
@@ -46,7 +59,7 @@ impl AdbManager {
     pub fn execute_adb(&self, args: &[&str]) -> Result<String, String> {
         let adb = self.adb_path.as_ref().ok_or_else(|| "ADB binary not found".to_string())?;
         
-        let output = Command::new(adb)
+        let output = create_command(adb)
             .args(args)
             .output()
             .map_err(|e| format!("Failed to execute adb: {}", e))?;
@@ -65,7 +78,7 @@ impl AdbManager {
             None => return Vec::new(),
         };
 
-        let output = match Command::new(adb).arg("devices").output() {
+        let output = match create_command(adb).arg("devices").output() {
             Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
             _ => return Vec::new(),
         };
@@ -108,7 +121,7 @@ impl AdbManager {
 }
 
 pub fn spawn_adb_supervisor(adb_mgr: Arc<AdbManager>, ports: Vec<u16>) {
-    tokio::spawn(async move {
+    tauri::async_runtime::spawn(async move {
         loop {
             tokio::time::sleep(Duration::from_secs(4)).await;
 
@@ -144,7 +157,7 @@ pub fn spawn_adb_supervisor(adb_mgr: Arc<AdbManager>, ports: Vec<u16>) {
 
 fn find_adb() -> Option<PathBuf> {
     // 1. Check PATH
-    if let Ok(output) = Command::new("where.exe").arg("adb").output() {
+    if let Ok(output) = create_command("where.exe").arg("adb").output() {
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
             if let Some(first_line) = stdout.lines().next() {
