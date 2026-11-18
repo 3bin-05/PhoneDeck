@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { decodeMsgPack, type AgentEvent } from '@phone-deck/ui-kit';
 import { useDeckStore } from './deckStore';
+import { useAmbientStore, registerAmbientSocketSender } from './ambientStore';
 
 export function useDeckBridge(wsUrl: string = 'ws://127.0.0.1:8765/ws') {
   const socketRef = useRef<WebSocket | null>(null);
@@ -12,6 +13,13 @@ export function useDeckBridge(wsUrl: string = 'ws://127.0.0.1:8765/ws') {
   useEffect(() => {
     let active = true;
 
+    // Hardware light sensor & schedule initialization
+    const cleanupSensor = useAmbientStore.getState().initHardwareSensor();
+    useAmbientStore.getState().evaluateSchedule();
+    const scheduleInterval = setInterval(() => {
+      useAmbientStore.getState().evaluateSchedule();
+    }, 30_000);
+
     // 1. One shared requestAnimationFrame loop that pushes ONE batched update per animation frame
     const flushBatchLoop = (now: number) => {
       if (!active) return;
@@ -19,12 +27,20 @@ export function useDeckBridge(wsUrl: string = 'ws://127.0.0.1:8765/ws') {
       const frameDelta = now - lastFrameTimeRef.current;
       lastFrameTimeRef.current = now;
 
-      // Flush batched updates if any arrived
+      // Stop processing telemetry if in dark mode (heartbeat profile only)
+      const ambientState = useAmbientStore.getState().state;
+      const isDark = ambientState === 'dark' || ambientState === 'locked_dark';
+
+      // Flush batched updates if any arrived and not dark
       const keys = Object.keys(pendingUpdatesRef.current);
       if (keys.length > 0) {
-        const batch = { ...pendingUpdatesRef.current };
-        pendingUpdatesRef.current = {};
-        useDeckStore.getState().applyMetricBatch(batch);
+        if (!isDark) {
+          const batch = { ...pendingUpdatesRef.current };
+          pendingUpdatesRef.current = {};
+          useDeckStore.getState().applyMetricBatch(batch);
+        } else {
+          pendingUpdatesRef.current = {};
+        }
       }
 
       // Update frame time stat
@@ -73,9 +89,28 @@ export function useDeckBridge(wsUrl: string = 'ws://127.0.0.1:8765/ws') {
         ws.binaryType = 'arraybuffer';
         socketRef.current = ws;
 
+        registerAmbientSocketSender((msg) => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(msg);
+          }
+        });
+
         ws.onopen = () => {
           if (!active) return;
           useDeckStore.getState().setConnected(true);
+
+          // Announce initial display state (ambient profile subscription)
+          const ambientState = useAmbientStore.getState().state;
+          const isDark = ambientState === 'dark' || ambientState === 'locked_dark';
+          try {
+            ws.send(JSON.stringify({
+              type: 'display_state',
+              state: isDark ? 'dark' : 'bright',
+              ambient_state: ambientState,
+            }));
+          } catch {
+            // ignore initial state error
+          }
         };
 
         ws.onclose = () => {
@@ -119,11 +154,16 @@ export function useDeckBridge(wsUrl: string = 'ws://127.0.0.1:8765/ws') {
               tickRateHz: tickRate,
             });
 
-            // Channel 1: Telemetry (queue into pendingUpdatesRef for next rAF batch)
+            const ambientState = useAmbientStore.getState().state;
+            const isDark = ambientState === 'dark' || ambientState === 'locked_dark';
+
+            // Channel 1: Telemetry (queue into pendingUpdatesRef for next rAF batch, dropped in dark mode)
             if (channel === 1 && payload) {
-              const updates = payload.updates || payload;
-              if (typeof updates === 'object' && updates !== null) {
-                Object.assign(pendingUpdatesRef.current, updates);
+              if (!isDark) {
+                const updates = payload.updates || payload;
+                if (typeof updates === 'object' && updates !== null) {
+                  Object.assign(pendingUpdatesRef.current, updates);
+                }
               }
             }
 
@@ -132,8 +172,11 @@ export function useDeckBridge(wsUrl: string = 'ws://127.0.0.1:8765/ws') {
               const agentEvt = payload as AgentEvent;
               useDeckStore.getState().addEvent(agentEvt);
 
-              // Wake dimmed screen for tasks/approvals per plan.md section 6.4
-              if (useDeckStore.getState().isDimmed) {
+              // Notify Ambient Night Clock mode of incoming agent event
+              useAmbientStore.getState().triggerEventAlert(agentEvt.kind);
+
+              // Wake dimmed screen for tasks/approvals per plan.md section 6.4 (if not locked in night dark)
+              if (useDeckStore.getState().isDimmed && !isDark) {
                 useDeckStore.getState().setDimmed(false);
               }
 
@@ -165,6 +208,8 @@ export function useDeckBridge(wsUrl: string = 'ws://127.0.0.1:8765/ws') {
 
     return () => {
       active = false;
+      cleanupSensor();
+      clearInterval(scheduleInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('keydown', handleKeyDown);
       if (animFrameIdRef.current) {

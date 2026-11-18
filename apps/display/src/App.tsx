@@ -20,6 +20,8 @@ import {
   useTheme,
   useEvents,
 } from './deckStore';
+import { useAmbientStore } from './ambientStore';
+import { NightClockView } from './NightClockView';
 import { BUILTIN_THEMES } from '@phone-deck/theme-engine';
 import {
   LiveWallpaper,
@@ -160,38 +162,21 @@ export default function App() {
     }
   };
 
-  // Night Mode Dim-to-Clock View (True OLED black, 1 fps ambient clock, <0.2 KB/s telemetry)
-  if (isDimmed) {
+  const ambientState = useAmbientStore((s) => s.state);
+
+  // Part A: Ambient-Light "Night Clock" Mode (Pure #000000 OLED, phone clock, heartbeat-only telemetry)
+  if (ambientState === 'dark' || ambientState === 'locked_dark' || isDimmed) {
     return (
-      <div
-        onClick={() => useDeckStore.getState().setDimmed(false)}
-        className="w-full h-screen bg-[#000000] text-[#71717A] flex flex-col items-center justify-between p-8 select-none cursor-pointer transition-colors duration-500"
-      >
-        <div className="w-full flex justify-between items-center text-xs font-mono text-[#4B4B55]">
-          <span className="flex items-center space-x-1">
-            <Moon className="w-3.5 h-3.5 text-[#7C5CFF]" />
-            <span>NIGHT MODE · DIMMED (&lt; 0.2 KB/S)</span>
-          </span>
-          <span>TAP ANYWHERE TO WAKE</span>
-        </div>
-
-        <div className="flex flex-col items-center justify-center my-auto">
-          <div className="text-6xl md:text-8xl font-mono font-extralight tracking-tight text-[#EDEDF2]/80 tabular-nums">
-            <DigitalClockContainer />
-          </div>
-          <div className="text-xs font-mono text-[#4B4B55] mt-4 flex items-center space-x-3">
-            <span>PHONE BATTERY: 85%</span>
-            <span>·</span>
-            <span className="text-[#00E599]">COOL 30°C</span>
-            <span>·</span>
-            <span>OLED BURN-IN GUARD ACTIVE</span>
-          </div>
-        </div>
-
-        <div className="text-[10px] font-mono text-[#4B4B55]">
-          THROUGHPUT: {stats.throughputBps} B/S · BUDGET: &lt; 200 B/S
-        </div>
-      </div>
+      <NightClockView
+        onTap={() => {
+          if (isDimmed) useDeckStore.getState().setDimmed(false);
+          useAmbientStore.getState().handleSingleTap();
+        }}
+        onDoubleTap={() => {
+          if (isDimmed) useDeckStore.getState().setDimmed(false);
+          useAmbientStore.getState().handleDoubleTap();
+        }}
+      />
     );
   }
 
@@ -203,6 +188,22 @@ export default function App() {
       }}
       className="w-full h-screen flex flex-col select-none overflow-hidden font-sans"
     >
+      {/* Peek Mode Banner */}
+      {ambientState === 'peek' && (
+        <div className="h-7 bg-amber-500/10 border-b border-amber-500/20 px-4 flex items-center justify-between text-[11px] font-mono text-amber-300 z-30 shrink-0">
+          <span className="flex items-center space-x-1.5">
+            <Moon className="w-3.5 h-3.5" />
+            <span>PEEK MODE (10S AUTO-RETURN TO DARK)</span>
+          </span>
+          <button
+            onClick={() => useAmbientStore.getState().handleSingleTap()}
+            className="text-[10px] uppercase font-semibold text-amber-200 hover:text-white px-1.5 py-0.5 rounded bg-amber-500/20 cursor-pointer"
+          >
+            RETURN TO DARK ✕
+          </button>
+        </div>
+      )}
+
       {/* Top Header Bar */}
       <header
         style={{
@@ -613,6 +614,73 @@ export default function App() {
             <div className="flex justify-between items-center pt-1 border-t border-white/[0.04]">
               <span className="text-[#71717A]">Sampler Idle Park</span>
               <span className="text-[#00E599] font-bold">ACTIVE (~0% CPU)</span>
+            </div>
+
+            {/* Part A: Ambient Night Clock Dev Controls */}
+            <div className="pt-2 border-t border-white/[0.08] space-y-2">
+              <div className="flex justify-between items-center text-[10px] uppercase font-semibold text-[#7C5CFF]">
+                <span>Ambient Sensor Debug</span>
+                <span className="text-zinc-400 font-mono lowercase">
+                  {useAmbientStore.getState().state} ({useAmbientStore.getState().timeInStateSecs}s)
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center text-[10px]">
+                <span className="text-[#71717A]">Raw / Filtered Lux</span>
+                <span className="text-white font-mono">
+                  {useAmbientStore.getState().rawLux.toFixed(1)} / {useAmbientStore.getState().filteredLux.toFixed(1)} lx
+                </span>
+              </div>
+
+              <div>
+                <div className="flex justify-between text-[9px] text-[#71717A] mb-1">
+                  <span>Lux Slider (Simulate Room Light)</span>
+                  <span className="text-white font-mono">{useAmbientStore.getState().rawLux.toFixed(1)} lx</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="0.5"
+                  value={useAmbientStore.getState().rawLux}
+                  onChange={(e) => useAmbientStore.getState().pushLux(parseFloat(e.target.value))}
+                  className="w-full accent-[#7C5CFF] h-1.5 bg-white/[0.08] rounded cursor-pointer"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5 pt-1">
+                <button
+                  onClick={() => {
+                    for (let i = 0; i < 5; i++) useAmbientStore.getState().pushLux(0.5);
+                  }}
+                  className="px-2 py-1 bg-white/[0.04] hover:bg-white/[0.08] rounded text-[10px] text-zinc-300 font-mono text-center cursor-pointer"
+                >
+                  Lights Off (0.5 lx)
+                </button>
+                <button
+                  onClick={() => {
+                    for (let i = 0; i < 5; i++) useAmbientStore.getState().pushLux(80.0);
+                  }}
+                  className="px-2 py-1 bg-white/[0.04] hover:bg-white/[0.08] rounded text-[10px] text-zinc-300 font-mono text-center cursor-pointer"
+                >
+                  Lights On (80 lx)
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  onClick={() => useAmbientStore.getState().handleSingleTap()}
+                  className="px-2 py-1 bg-[#7C5CFF]/20 hover:bg-[#7C5CFF]/30 text-[#7C5CFF] rounded text-[10px] font-mono text-center cursor-pointer"
+                >
+                  1× Tap (Peek)
+                </button>
+                <button
+                  onClick={() => useAmbientStore.getState().handleDoubleTap()}
+                  className="px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded text-[10px] font-mono text-center cursor-pointer"
+                >
+                  2× Tap (Lock)
+                </button>
+              </div>
             </div>
           </div>
         </div>

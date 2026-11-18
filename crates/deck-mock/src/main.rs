@@ -12,13 +12,14 @@ use protocol::{
     GitStats, TelemetryState, PROTOCOL_VERSION,
 };
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast;
 use tower_http::cors::CorsLayer;
 
 static SEQ: AtomicU64 = AtomicU64::new(1);
+static IS_DARK: AtomicBool = AtomicBool::new(false);
 
 type AppState = Arc<broadcast::Sender<Vec<u8>>>;
 
@@ -87,6 +88,21 @@ async fn handle_socket(socket: WebSocket, tx: AppState) {
                 }
                 Message::Text(text) => {
                     println!("[deck-mock] Received text: {}", text);
+                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
+                        if let Some(t) = val.get("type").and_then(|v| v.as_str()) {
+                            if t == "display_state" {
+                                if let Some(s) = val.get("state").and_then(|v| v.as_str()) {
+                                    if s == "dark" {
+                                        IS_DARK.store(true, Ordering::SeqCst);
+                                        println!("[deck-mock] -> Activated Ambient Profile: Telemetry paused (heartbeat only)");
+                                    } else {
+                                        IS_DARK.store(false, Ordering::SeqCst);
+                                        println!("[deck-mock] -> Activated Active Profile: Telemetry streaming resumed");
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 Message::Close(_) => {
                     break;
@@ -147,14 +163,26 @@ async fn run_simulation_generator(tx: AppState) {
         curr_state.set(FieldId::MediaPositionSec, (tick % 240) as u32);
         curr_state.set(FieldId::MediaDurationSec, 240u32);
 
-        let delta = compute_delta(&prev_state, &curr_state, &deadbands);
-        if !delta.is_empty() {
+        let is_dark = IS_DARK.load(Ordering::SeqCst);
+
+        if !is_dark {
+            let delta = compute_delta(&prev_state, &curr_state, &deadbands);
+            if !delta.is_empty() {
+                let seq = SEQ.fetch_add(1, Ordering::SeqCst);
+                let env = Envelope::telemetry(seq, delta);
+                if let Ok(bytes) = to_msgpack(&env) {
+                    let _ = tx.send(bytes);
+                }
+                prev_state = curr_state;
+            }
+        } else if tick % 10 == 0 {
+            // Ambient mode: Send minimal heartbeat packet every 5 seconds (<50 B/s)
             let seq = SEQ.fetch_add(1, Ordering::SeqCst);
-            let env = Envelope::telemetry(seq, delta);
+            let empty_delta = protocol::TelemetryDelta::default();
+            let env = Envelope::telemetry(seq, empty_delta);
             if let Ok(bytes) = to_msgpack(&env) {
                 let _ = tx.send(bytes);
             }
-            prev_state = curr_state;
         }
 
         // Periodically emit an AgentEvent alert (every ~12 seconds = 24 ticks)

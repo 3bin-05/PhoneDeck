@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { LayoutEditor } from './editor/LayoutEditor';
 import { ShortcutsManager } from './editor/ShortcutsManager';
 import { RulesManager } from './editor/RulesManager';
+import { AmbientSettings } from './editor/AmbientSettings';
 import {
   QrCode,
   Monitor,
@@ -18,6 +19,7 @@ import {
   Smartphone,
   Command,
   Sparkles,
+  Moon,
 } from 'lucide-react';
 
 interface PairingStatus {
@@ -39,7 +41,7 @@ interface PairedDevice {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<
-    'status' | 'devices' | 'editor' | 'shortcuts' | 'rules' | 'settings'
+    'status' | 'devices' | 'editor' | 'shortcuts' | 'rules' | 'ambient' | 'settings'
   >('status');
   const [pairingStatus, setPairingStatus] = useState<PairingStatus | null>(null);
   const [countdown, setCountdown] = useState<number>(120);
@@ -187,6 +189,7 @@ export default function App() {
             { id: 'editor', label: 'Layout Editor', icon: SlidersHorizontal },
             { id: 'shortcuts', label: 'Shortcuts', icon: Command },
             { id: 'rules', label: 'Rules', icon: Sparkles },
+            { id: 'ambient', label: 'Ambient', icon: Moon },
             { id: 'settings', label: 'Settings', icon: Settings2 },
           ].map(({ id, label, icon: Icon }) => (
             <button
@@ -442,6 +445,7 @@ export default function App() {
         {activeTab === 'editor' && <LayoutEditor />}
         {activeTab === 'shortcuts' && <ShortcutsManager />}
         {activeTab === 'rules' && <RulesManager />}
+        {activeTab === 'ambient' && <AmbientSettings />}
 
         {activeTab === 'settings' && (
           <div className="max-w-4xl mx-auto p-8 rounded-2xl bg-[#08080C] border border-white/[0.08] space-y-4">

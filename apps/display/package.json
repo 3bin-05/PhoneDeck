@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@phone-deck/android-plugin": "workspace:*",
     "@phone-deck/theme-engine": "workspace:*",
     "@phone-deck/ui-kit": "workspace:*",
     "@phone-deck/wallpaper": "workspace:*",

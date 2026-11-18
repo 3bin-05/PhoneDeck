@@ -110,11 +110,13 @@ async fn measure_stream(target_url: &str, duration_secs: u64, dimmed: bool) -> R
 
     let (mut write, mut read) = ws_stream.split();
 
-    // If dimmed requested, send subscription change
+    // If dimmed requested, send ambient profile display_state change
     if dimmed {
         let msg = serde_json::json!({
+            "type": "display_state",
+            "state": "dark",
             "dimmed": true,
-            "subscribe": [14] // Uptime only
+            "subscribe": []
         });
         let _ = write.send(Message::Text(msg.to_string().into())).await;
     }

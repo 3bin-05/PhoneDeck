@@ -3,6 +3,7 @@
 //! Provides the MessagePack envelope, integer field-ID dictionary,
 //! delta encoder with dead-band filtering, and shared event contracts.
 
+pub mod ambient;
 pub mod crypto;
 pub mod delta;
 pub mod envelope;
@@ -10,6 +11,7 @@ pub mod events;
 pub mod fields;
 pub mod lttb;
 
+pub use ambient::*;
 pub use lttb::{lttb_downsample, DataPoint};
 
 pub use crypto::{

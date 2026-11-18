@@ -3,6 +3,10 @@ package org.phonedeck.android
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.net.Uri
 import android.net.wifi.WifiManager
 import android.os.Build
@@ -36,6 +40,11 @@ class InstallApkArgs {
     var path: String = ""
 }
 
+@InvokeArg
+class BrightnessArgs {
+    var value: Float = -1.0f // -1.0f to restore system brightness, or 0.01f to 1.0f
+}
+
 @TauriPlugin
 class DeckAndroidPlugin(private val activity: Activity) : Plugin(activity) {
 
@@ -43,6 +52,23 @@ class DeckAndroidPlugin(private val activity: Activity) : Plugin(activity) {
     private var multicastLock: WifiManager.MulticastLock? = null
     private var nsdHelper: NsdDiscoveryHelper? = null
     private var thermalMonitor: ThermalMonitor? = null
+    private var sensorManager: SensorManager? = null
+    private var lightSensor: Sensor? = null
+    private var isLightSensorActive = false
+    private var originalBrightness: Float = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+
+    private val lightListener = object : SensorEventListener {
+        override fun onSensorChanged(event: SensorEvent?) {
+            if (event?.sensor?.type == Sensor.TYPE_LIGHT) {
+                val lux = event.values[0]
+                val ret = JSObject()
+                ret.put("lux", lux)
+                trigger("ambientLux", ret)
+            }
+        }
+
+        override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+    }
 
     override fun load(webView: android.webkit.WebView) {
         super.load(webView)
@@ -66,6 +92,56 @@ class DeckAndroidPlugin(private val activity: Activity) : Plugin(activity) {
             trigger("thermalStatusChanged", ret)
         }
         thermalMonitor?.start()
+
+        // Initialize Light Sensor
+        sensorManager = activity.applicationContext.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+        lightSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_LIGHT)
+    }
+
+    @Command
+    fun isLightSensorAvailable(invoke: Invoke) {
+        val available = lightSensor != null
+        val ret = JSObject()
+        ret.put("available", available)
+        invoke.resolve(ret)
+    }
+
+    @Command
+    fun startLightSensor(invoke: Invoke) {
+        if (lightSensor != null && !isLightSensorActive) {
+            // ~1s sampling period with maxReportLatency batching
+            val samplingPeriodUs = 1_000_000 // 1 s
+            val maxLatencyUs = 2_000_000 // 2 s batching
+            sensorManager?.registerListener(lightListener, lightSensor, samplingPeriodUs, maxLatencyUs)
+            isLightSensorActive = true
+        }
+        invoke.resolve()
+    }
+
+    @Command
+    fun stopLightSensor(invoke: Invoke) {
+        if (isLightSensorActive) {
+            sensorManager?.unregisterListener(lightListener)
+            isLightSensorActive = false
+        }
+        invoke.resolve()
+    }
+
+    @Command
+    fun setScreenBrightness(invoke: Invoke) {
+        val args = invoke.parseArgs(BrightnessArgs::class.java)
+        activity.runOnUiThread {
+            val layoutParams = activity.window.attributes
+            if (args.value < 0.0f) {
+                // Restore system default brightness
+                layoutParams.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+            } else {
+                // Clamp brightness between 0.01f and 1.0f
+                layoutParams.screenBrightness = args.value.coerceIn(0.01f, 1.0f)
+            }
+            activity.window.attributes = layoutParams
+            invoke.resolve()
+        }
     }
 
     @Command
@@ -274,10 +350,24 @@ class DeckAndroidPlugin(private val activity: Activity) : Plugin(activity) {
     }
 
     override fun onDestroy() {
+        stopLightSensorInternal()
+        // Restore screen brightness
+        activity.runOnUiThread {
+            val layoutParams = activity.window.attributes
+            layoutParams.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+            activity.window.attributes = layoutParams
+        }
         thermalMonitor?.stop()
         nsdHelper?.stop()
         multicastLock?.let { if (it.isHeld) it.release() }
         wifiLock?.let { if (it.isHeld) it.release() }
         super.onDestroy()
+    }
+
+    private fun stopLightSensorInternal() {
+        if (isLightSensorActive) {
+            sensorManager?.unregisterListener(lightListener)
+            isLightSensorActive = false
+        }
     }
 }

@@ -248,6 +248,9 @@ importers:
 
   apps/display:
     dependencies:
+      '@phone-deck/android-plugin':
+        specifier: workspace:*
+        version: link:../../packages/deck-android
       '@phone-deck/theme-engine':
         specifier: workspace:*
         version: link:../../packages/theme-engine
@@ -309,6 +312,12 @@ importers:
       vite:
         specifier: ^6.1.0
         version: 6.4.6(jiti@1.21.7)
+
+  packages/deck-android:
+    dependencies:
+      '@tauri-apps/api':
+        specifier: ^2.2.0
+        version: 2.12.5
 
   packages/theme-engine:
     dependencies:

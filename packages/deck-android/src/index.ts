@@ -105,3 +105,64 @@ export async function installApk(path: string): Promise<void> {
     await invoke('plugin:deck-android|installApk', { path });
   }
 }
+
+export async function isLightSensorAvailable(): Promise<boolean> {
+  if (isTauri) {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const res = await invoke<{ available: boolean }>('plugin:deck-android|isLightSensorAvailable');
+      return res.available;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+export async function startLightSensor(): Promise<void> {
+  if (isTauri) {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('plugin:deck-android|startLightSensor');
+    } catch (e) {
+      console.warn('startLightSensor invoke failed:', e);
+    }
+  }
+}
+
+export async function stopLightSensor(): Promise<void> {
+  if (isTauri) {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('plugin:deck-android|stopLightSensor');
+    } catch (e) {
+      console.warn('stopLightSensor invoke failed:', e);
+    }
+  }
+}
+
+export async function setScreenBrightness(value: number): Promise<void> {
+  if (isTauri) {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('plugin:deck-android|setScreenBrightness', { value });
+    } catch (e) {
+      console.warn('setScreenBrightness invoke failed:', e);
+    }
+  }
+}
+
+export async function onAmbientLux(callback: (lux: number) => void): Promise<() => void> {
+  if (isTauri) {
+    try {
+      const { listen } = await import('@tauri-apps/api/event');
+      const unlisten = await listen<{ lux: number }>('ambientLux', (event: { payload: { lux: number } }) => {
+        callback(event.payload.lux);
+      });
+      return unlisten;
+    } catch (e) {
+      console.warn('onAmbientLux listen failed:', e);
+    }
+  }
+  return () => {};
+}
