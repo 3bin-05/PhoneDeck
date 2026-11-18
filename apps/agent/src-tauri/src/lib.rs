@@ -1,3 +1,4 @@
+pub mod adb;
 pub mod app_registry;
 pub mod bridge;
 pub mod commands;
@@ -49,6 +50,7 @@ pub struct AgentAppState {
     pub app_registry: Arc<app_registry::AppRegistryManager>,
     pub updater: Arc<AgentUpdaterManager>,
     pub hub: Arc<AgentHub>,
+    pub adb: Arc<adb::AdbManager>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -96,6 +98,8 @@ pub fn run() {
             let media = media_session::MediaSessionManager::new(telemetry_hub.clone());
             let app_registry = app_registry::AppRegistryManager::new(telemetry_hub.clone(), media.clone());
             let updater = Arc::new(AgentUpdaterManager::new(&storage_dir, env!("CARGO_PKG_VERSION")));
+            let adb_mgr = Arc::new(adb::AdbManager::new());
+            adb::spawn_adb_supervisor(adb_mgr.clone(), vec![AGENT_PORT, bridge::HTTP_BRIDGE_PORT]);
 
             // Record startup health
             let updater_health = updater.clone();
@@ -162,6 +166,7 @@ pub fn run() {
                 app_registry: app_registry.clone(),
                 updater: updater.clone(),
                 hub: hub.clone(),
+                adb: adb_mgr.clone(),
             };
 
             // Start LAN-only WSS server (axum + rustls)
@@ -230,7 +235,10 @@ pub fn run() {
             commands::check_for_updates,
             commands::apply_staged_update,
             commands::set_updater_config,
-            commands::mark_changelog_viewed
+            commands::mark_changelog_viewed,
+            commands::get_adb_status,
+            commands::adb_install_phone_apk,
+            commands::adb_launch_phone_app
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

@@ -28,6 +28,8 @@ apps/**/src-tauri/target/
 
 # Logs & temp
 *.log
+agent_debug.log
+reference/
 .DS_Store
 Thumbs.db
 .env

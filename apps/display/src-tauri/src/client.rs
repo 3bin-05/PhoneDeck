@@ -275,25 +275,29 @@ impl DisplayClientManager {
 
 /// Race TCP connection attempts to candidate hosts with exponential backoff & jitter.
 pub async fn race_candidate_hosts(hosts: &[String], port: u16) -> Result<SocketAddr, String> {
-    if hosts.is_empty() {
+    let mut candidate_hosts = hosts.to_vec();
+    if !candidate_hosts.iter().any(|h| h == "127.0.0.1") {
+        candidate_hosts.push("127.0.0.1".to_string());
+    }
+
+    if candidate_hosts.is_empty() {
         return Err("No candidate hosts to connect to".to_string());
     }
 
-    // Try all hosts concurrently with timeout
-    let mut tasks = Vec::new();
-    for host in hosts {
-        let host_clone = host.clone();
-        tasks.push(tokio::spawn(async move {
-            let addr_str = format!("{}:{}", host_clone, port);
-            match tokio::time::timeout(Duration::from_millis(1500), TcpStream::connect(&addr_str)).await {
+    use futures_util::stream::{FuturesUnordered, StreamExt};
+    let mut futures = FuturesUnordered::new();
+    for host in candidate_hosts {
+        futures.push(async move {
+            let addr_str = format!("{}:{}", host, port);
+            match tokio::time::timeout(Duration::from_millis(2000), TcpStream::connect(&addr_str)).await {
                 Ok(Ok(stream)) => stream.peer_addr().ok(),
                 _ => None,
             }
-        }));
+        });
     }
 
-    for task in tasks {
-        if let Ok(Some(addr)) = task.await {
+    while let Some(res) = futures.next().await {
+        if let Some(addr) = res {
             return Ok(addr);
         }
     }

@@ -75,10 +75,6 @@ abstract class BuildTask : DefaultTask() {
         val proj = File(projectDir ?: return false)
         val dstDir = File(proj, "src/main/jniLibs/$abi")
         val dstSo = File(dstDir, "libdisplay_lib.so")
-        if (dstSo.exists() && dstSo.length() > 0) {
-            println("PhoneDeck BuildTask: using existing jniLibs so at $dstSo (${dstSo.length()} bytes)")
-            return true
-        }
 
         val candidateLocations = listOf(
             File("D:/PhoneDeck/target/$triple/$profile/libdisplay_lib.so"),
@@ -94,8 +90,13 @@ abstract class BuildTask : DefaultTask() {
                 dstSo.toPath(),
                 java.nio.file.StandardCopyOption.REPLACE_EXISTING
             )
-            println("PhoneDeck BuildTask: copied $srcSo to $dstSo (${dstSo.length()} bytes)")
+            println("PhoneDeck BuildTask: copied fresh $srcSo to $dstSo (${dstSo.length()} bytes)")
             return dstSo.exists() && dstSo.length() > 0
+        }
+
+        if (dstSo.exists() && dstSo.length() > 0) {
+            println("PhoneDeck BuildTask: using existing jniLibs so at $dstSo (${dstSo.length()} bytes)")
+            return true
         }
         println("PhoneDeck BuildTask: no candidate .so found for $triple/$profile in $candidateLocations")
         return false

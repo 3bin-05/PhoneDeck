@@ -23,6 +23,7 @@ import {
   Sparkles,
   Moon,
   AppWindow,
+  Download,
 } from 'lucide-react';
 
 interface PairingStatus {
@@ -42,6 +43,13 @@ interface PairedDevice {
   last_seen: number;
 }
 
+interface AdbStatus {
+  available: boolean;
+  adb_path: string | null;
+  devices: string[];
+  reverse_active: boolean;
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<
     'status' | 'devices' | 'editor' | 'apps' | 'shortcuts' | 'rules' | 'ambient' | 'settings'
@@ -51,6 +59,9 @@ export default function App() {
   const [pairedDevices, setPairedDevices] = useState<PairedDevice[]>([]);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [adbStatus, setAdbStatus] = useState<AdbStatus | null>(null);
+  const [installingApk, setInstallingApk] = useState(false);
+  const [adbMessage, setAdbMessage] = useState<string | null>(null);
 
   const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
@@ -153,9 +164,51 @@ export default function App() {
     }
   };
 
+  const fetchAdbStatus = async () => {
+    if (isTauri) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const res = await invoke<AdbStatus>('get_adb_status');
+        setAdbStatus(res);
+      } catch (err) {
+        console.error('Failed to get adb status:', err);
+      }
+    }
+  };
+
+  const handleAdbInstall = async () => {
+    if (!isTauri) return;
+    setInstallingApk(true);
+    setAdbMessage(null);
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const msg = await invoke<string>('adb_install_phone_apk');
+      setAdbMessage(msg);
+      fetchAdbStatus();
+    } catch (err: any) {
+      setAdbMessage(`Install failed: ${err}`);
+    } finally {
+      setInstallingApk(false);
+    }
+  };
+
+  const handleAdbLaunch = async () => {
+    if (!isTauri) return;
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const msg = await invoke<string>('adb_launch_phone_app');
+      setAdbMessage(msg);
+    } catch (err: any) {
+      setAdbMessage(`Launch failed: ${err}`);
+    }
+  };
+
   useEffect(() => {
     fetchPairingStatus();
     fetchPairedDevices();
+    fetchAdbStatus();
+    const adbInterval = setInterval(fetchAdbStatus, 3000);
+    return () => clearInterval(adbInterval);
   }, []);
 
   useEffect(() => {
@@ -442,6 +495,77 @@ export default function App() {
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* USB Cable & ADB Automatic Tunnel Section */}
+            <div className="p-5 rounded-2xl bg-[#08080C] border border-white/[0.08] space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#00E599]" />
+                  <h3 className="text-sm font-semibold tracking-tight text-[#EDEDF2] font-mono">
+                    USB Cable & ADB Auto-Tunnel (Instant Connection)
+                  </h3>
+                </div>
+                <div className="text-[11px] font-mono px-2 py-0.5 rounded bg-white/[0.05] text-[#71717A] border border-white/[0.06]">
+                  tcp:8766 ⇄ tcp:8766
+                </div>
+              </div>
+
+              <p className="text-xs text-[#71717A] leading-relaxed">
+                Connect your Android phone with a USB data cable and enable <span className="text-[#EDEDF2]">Developer Options &gt; USB Debugging</span>. 
+                PhoneDeck automatically tunnels the encrypted port over USB for 0ms latency and 100% stable connection without Wi-Fi.
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs font-mono">
+                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06]">
+                  <div className="text-[10px] text-[#71717A] uppercase">ADB Status</div>
+                  <div className={`mt-1 font-semibold ${adbStatus?.available ? 'text-[#00E599]' : 'text-[#FFB800]'}`}>
+                    {adbStatus?.available ? 'Available (Ready)' : 'ADB Not Detected'}
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06]">
+                  <div className="text-[10px] text-[#71717A] uppercase">Attached Devices</div>
+                  <div className="mt-1 text-[#EDEDF2] font-semibold truncate">
+                    {adbStatus?.devices && adbStatus.devices.length > 0
+                      ? adbStatus.devices.join(', ')
+                      : 'None (Connect USB cable)'}
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06]">
+                  <div className="text-[10px] text-[#71717A] uppercase">Reverse Port Status</div>
+                  <div className={`mt-1 font-semibold ${adbStatus?.reverse_active ? 'text-[#00E599]' : 'text-[#71717A]'}`}>
+                    {adbStatus?.reverse_active ? 'Active (tcp:8766 reversed)' : 'Inactive'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  onClick={handleAdbInstall}
+                  disabled={installingApk || !adbStatus?.devices || adbStatus.devices.length === 0}
+                  className="px-4 py-2 rounded-xl bg-[#7C5CFF] hover:bg-[#6C4CEF] text-white text-xs font-semibold font-mono flex items-center gap-2 shadow-[0_0_15px_rgba(124,92,255,0.25)] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Download className={`w-3.5 h-3.5 ${installingApk ? 'animate-bounce' : ''}`} />
+                  <span>{installingApk ? 'Installing APK over USB...' : 'Install Phone App via USB'}</span>
+                </button>
+
+                <button
+                  onClick={handleAdbLaunch}
+                  disabled={!adbStatus?.devices || adbStatus.devices.length === 0}
+                  className="px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-[#EDEDF2] text-xs font-semibold font-mono flex items-center gap-2 border border-white/[0.08] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Smartphone className="w-3.5 h-3.5 text-[#00E599]" />
+                  <span>Launch Display on Phone</span>
+                </button>
+              </div>
+
+              {adbMessage && (
+                <div className="p-3 rounded-lg bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-[#00E599]">
+                  {adbMessage}
+                </div>
+              )}
             </div>
           </div>
         )}

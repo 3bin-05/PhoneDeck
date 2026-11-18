@@ -25,7 +25,10 @@ pub struct PairingStatusPayload {
 pub fn get_pairing_status(state: State<'_, AgentAppState>) -> Result<PairingStatusPayload, String> {
     let (token, expires_in) = state.pairing.get_or_refresh_token();
     let lan_ips = get_lan_ips();
-    let hosts = lan_ips.iter().map(|ip| ip.to_string()).collect::<Vec<_>>();
+    let mut hosts = lan_ips.iter().map(|ip| ip.to_string()).collect::<Vec<_>>();
+    if !hosts.iter().any(|h| h == "127.0.0.1") {
+        hosts.push("127.0.0.1".to_string());
+    }
 
     let pair_uri = PairUri {
         hosts: hosts.clone(),
@@ -55,7 +58,10 @@ pub fn get_pairing_status(state: State<'_, AgentAppState>) -> Result<PairingStat
 pub fn refresh_pairing_token(state: State<'_, AgentAppState>) -> Result<PairingStatusPayload, String> {
     let (token, expires_in) = state.pairing.refresh_token();
     let lan_ips = get_lan_ips();
-    let hosts = lan_ips.iter().map(|ip| ip.to_string()).collect::<Vec<_>>();
+    let mut hosts = lan_ips.iter().map(|ip| ip.to_string()).collect::<Vec<_>>();
+    if !hosts.iter().any(|h| h == "127.0.0.1") {
+        hosts.push("127.0.0.1".to_string());
+    }
 
     let pair_uri = PairUri {
         hosts: hosts.clone(),
@@ -316,4 +322,58 @@ pub async fn mark_changelog_viewed(
     let mut cfg = state.updater.get_config().await;
     cfg.changelog_viewed = Some(version);
     state.updater.save_config(cfg).await
+}
+
+#[tauri::command]
+pub async fn get_adb_status(state: State<'_, AgentAppState>) -> Result<crate::adb::AdbStatus, String> {
+    Ok(state.adb.get_status().await)
+}
+
+#[tauri::command]
+pub async fn adb_install_phone_apk(
+    device: Option<String>,
+    state: State<'_, AgentAppState>,
+) -> Result<String, String> {
+    let devices = state.adb.query_devices().await;
+    let target_device = match device {
+        Some(d) => d,
+        None => devices
+            .first()
+            .cloned()
+            .ok_or_else(|| "No Android device connected over USB".to_string())?,
+    };
+
+    let candidate_paths = [
+        std::path::PathBuf::from(r"D:\PhoneDeck\executable files\PhoneDeck-Display-armv7.apk"),
+        std::path::PathBuf::from(r"D:\PhoneDeck\executable files\PhoneDeck-Display.apk"),
+        std::path::PathBuf::from(r"D:\PhoneDeck\apps\display\src-tauri\gen\android\app\build\outputs\apk\arm\release\app-arm-release.apk"),
+        std::path::PathBuf::from(r"D:\PhoneDeck\apps\display\src-tauri\gen\android\app\build\outputs\apk\universal\release\app-universal-release.apk"),
+    ];
+
+    let apk = candidate_paths
+        .into_iter()
+        .find(|p| p.exists())
+        .ok_or_else(|| "Display APK not found on PC".to_string())?;
+
+    state.adb.install_apk(&target_device, &apk)?;
+    let _ = state.adb.launch_app(&target_device);
+    Ok(format!("Installed and launched {} successfully on {}", apk.file_name().unwrap_or_default().to_string_lossy(), target_device))
+}
+
+#[tauri::command]
+pub async fn adb_launch_phone_app(
+    device: Option<String>,
+    state: State<'_, AgentAppState>,
+) -> Result<String, String> {
+    let devices = state.adb.query_devices().await;
+    let target_device = match device {
+        Some(d) => d,
+        None => devices
+            .first()
+            .cloned()
+            .ok_or_else(|| "No Android device connected over USB".to_string())?,
+    };
+
+    state.adb.launch_app(&target_device)?;
+    Ok(format!("Launched PhoneDeck Display on {}", target_device))
 }
