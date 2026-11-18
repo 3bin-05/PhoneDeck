@@ -8,5 +8,8 @@ export default defineConfig({
     port: 5174,
     strictPort: true,
   },
+  build: {
+    target: ['chrome64'],
+  },
   envPrefix: ['VITE_', 'TAURI_ENV_*'],
 });

@@ -91,6 +91,7 @@ class DeckAndroidPlugin(private val activity: Activity) : Plugin(activity) {
 
     override fun load(webView: android.webkit.WebView) {
         super.load(webView)
+        instance = this
         val wifiManager = activity.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
 
         // Create high performance WifiLock
@@ -613,10 +614,6 @@ class DeckAndroidPlugin(private val activity: Activity) : Plugin(activity) {
         }
     }
 
-    override fun load(webView: android.webkit.WebView) {
-        super.load(webView)
-        instance = this
-    }
 
     override fun onDestroy() {
         if (instance === this) {
