@@ -1,0 +1,484 @@
+# Phone Deck — Project Plan (v2)
+
+> Turn an old Android phone into a Steam-Deck-style companion screen for your PC. Live stats, AI-agent "done, go review" alerts, one-tap shortcuts, and a live wallpaper. 100% local over your Wi-Fi, featherweight on bandwidth and battery.
+
+**Final deliverables**
+1. **Phone Deck Agent**: Windows desktop app (installer) with tray, layout editor, settings, pairing QR
+2. **Phone Deck Display**: signed Android **APK** (the thing running on the old phone)
+
+**What changed in v2**
+- Studied [ersinkoc/phonebox](https://github.com/ersinkoc/phonebox) (see section 2) and folded in the good ideas
+- AI Agent Hub now does **task-complete notifications** (with a git change summary), not just approvals
+- New **Live Wallpaper engine** (section 8)
+- Full **optimization playbook** with actual algorithms and measurable budgets (section 10)
+- Step-by-step **Antigravity prompts P0 to P10** (section 16)
+
+---
+
+## 1. Vision & Principles
+
+A phone on your desk, plugged into a charger (not your PC), glowing with a deck-style dashboard. PC in range, it lights up. An AI agent finishes a task, the phone buzzes and shows *what* finished and *how much changed*. Tap, jump to your editor, review.
+
+1. **Customizable first.** Every pixel is theme-driven. Your generated UI image drops in as a skin with zero code changes.
+2. **Featherweight.** Agent near 0% CPU when idle, telemetry under 1 KB/s, phone battery and thermals respected.
+3. **Local only.** No cloud, no accounts, no relay. The only optional outbound call is weather, made by the Agent and cached.
+4. **Opinionated design.** Minimal, strong aesthetic. Nothing that looks like a dashboard template.
+5. **Fails gracefully.** Missing sensor, sleeping PC, flaky Wi-Fi: always show something sensible.
+
+---
+
+## 2. Lessons from PhoneBox (what we borrow, what we do differently)
+
+PhoneBox is an MIT-licensed project: .NET agent + native Android WebView app, USB via `adb reverse`, optional Wi-Fi/Tailscale after a one-time USB pairing, 41 widgets, 18 templates, webhooks, rules, AI quota + session widgets.
+
+| PhoneBox idea | Our take |
+|---|---|
+| Agent samples **only what's on screen** | Same. Subscription refcounting per widget (section 10) |
+| Native layer proxies all network calls, so WebView has no CORS / mixed-content / self-signed-cert pain | Same idea, but in Rust: the **Tauri Rust core on the phone owns the socket**, pins the cert, decodes data, and hands the UI only changed values |
+| Pinned self-signed TLS cert + secret key for Wi-Fi mode | Same, plus **QR pairing** (no USB needed even for first setup) |
+| Widget = `create(box, ctx) → update()` + a JSON catalog that drives the editor | Same pattern: `widgets.json` catalog drives the PC editor and the phone runtime |
+| Layout editor on the PC, phone picks up config within seconds | Same, but the editor is the **native desktop app window**, not a browser tab |
+| Webhooks: `POST /api/push/<key>`, `/api/notify`, `/api/goto/<page>` | Keep this API shape (it is great). Extra: `phonedeck` CLI wraps it |
+| Rules engine (when → then, "only while it lasts") | Keep, with a simpler JSON rule format |
+| Reads AI sessions from `~/.claude/sessions` and `~/.codex/sessions` | Keep as the **zero-config fallback**; hooks give instant, precise events on top |
+| Demo server with fake data to develop UI in a browser | Keep: `deck-mock` mock agent for UI dev without a PC or phone |
+| Update by `adb install -r` | Replace: Agent serves the new APK over LAN, phone installs it (no USB) |
+
+**Not copying:** the .NET stack, USB-first design, or any code. We use it as a reference for the behaviors above. If you ever do copy code, keep the MIT notice.
+
+---
+
+## 3. Architecture
+
+```
+┌────────────── PC (Windows first) ──────────────┐        ┌──────────── Old Android phone ────────────┐
+│  Phone Deck Agent (Tauri 2)                     │        │  Phone Deck Display (Tauri 2 Android)      │
+│  ├─ Rust core                                   │  WSS   │  ├─ Rust core                              │
+│  │   ├─ sensors (sysinfo, NVML, media, procs)   │◄──────►│  │   ├─ pinned-TLS WebSocket client       │
+│  │   ├─ WSS server (LAN only) + mDNS advertise  │ LAN    │  │   ├─ delta decode + state store         │
+│  │   ├─ session/agent watchers (notify crate)   │ only   │  │   └─ per-frame batched push to UI       │
+│  │   ├─ hook bridge (localhost HTTP) + CLI      │        │  ├─ React UI: widgets, wallpaper, theme    │
+│  │   └─ action executor (launch, media, lock)   │        │  └─ Kotlin plugin: wake/wifi lock, NSD,    │
+│  └─ React UI: editor, settings, QR, event log   │        │      thermal, battery, vibrate, installer  │
+└─────────────────────────────────────────────────┘        └────────────────────────────────────────────┘
+```
+
+### Tech stack
+| Layer | Choice |
+|---|---|
+| Both apps | Tauri 2 (Rust core + WebView UI) |
+| Rust | tokio, axum (WebSocket + HTTP), rustls, rcgen (self-signed cert), sysinfo, nvml-wrapper (optional), mdns-sd, notify (file watching), rmp-serde (MessagePack), qrcode, rusqlite (event history), tauri-plugin-autostart / updater |
+| UI | React + Vite + TypeScript + Tailwind + Framer Motion, dnd-kit for the editor grid, Zustand for state |
+| Android native | Kotlin Tauri plugin: `FLAG_KEEP_SCREEN_ON`, WifiLock (high-perf), MulticastLock, `NsdManager` discovery, thermal status, battery, vibration, brightness, APK install |
+| Shared | `protocol` Rust crate, TS types generated from it (ts-rs or specta) so both sides can never drift |
+
+### Repo layout
+```
+phone-deck/
+├─ plan.md
+├─ crates/
+│  ├─ protocol/        # message types, field dictionary, delta encoder, versioning
+│  ├─ deck-cli/        # `phonedeck` CLI (notify / ask / push)
+│  ├─ deck-mock/       # mock agent with fake data for UI dev
+│  └─ deck-sim/        # headless fake phone: measures bytes/s + CPU in CI
+├─ apps/
+│  ├─ agent/           # Tauri desktop app
+│  └─ display/         # Tauri Android app
+├─ packages/
+│  ├─ widgets/         # widget runtime + widgets + widgets.json catalog
+│  ├─ theme-engine/    # theme schema, loader, validator
+│  ├─ wallpaper/       # live wallpaper engine + presets
+│  └─ ui-kit/          # shared design tokens + primitives
+├─ integrations/       # Claude Code hook scripts, Codex notify, Ollama poller
+└─ docs/
+```
+
+---
+
+## 4. Protocol & Networking
+
+**One WebSocket, two logical channels:**
+
+| Channel | Semantics | Used for |
+|---|---|---|
+| `telemetry` | lossy, latest-wins, delta-encoded, dead-banded | CPU, RAM, GPU, net, temps, media position |
+| `events` | reliable, ordered, acked, resumable | agent-complete, approvals, notifications, config changes, actions |
+
+- **Encoding:** MessagePack with **integer field IDs** from a shared dictionary (no string keys on the wire). Envelope: `[type, seq, payload]`.
+- **Resume:** events carry a sequence number. Phone acks. On reconnect the phone sends `last_seq`, Agent replays only what was missed (bounded queue, e.g. last 200).
+- **Time:** the phone renders its own clock locally. The Agent sends a time-sync only on connect. Clocks cost zero bandwidth.
+- **Heartbeat:** WebSocket ping every 20 s, dead-peer detection at 2 missed pongs. Telemetry itself counts as a heartbeat while flowing.
+- **Discovery:** QR contains the IP list, so first connect needs no discovery. After that: **race** the cached IP against an mDNS lookup (Android `NsdManager` via the Kotlin plugin, since raw multicast from Rust on Android is flaky) and take the first answer.
+- **Config sync:** layout/theme/shortcuts are versioned by content hash. Phone sends its hash, Agent only sends config if it differs.
+
+### Pairing (QR, no USB)
+1. Agent generates a self-signed cert (once) and shows a QR: `phonedeck://pair?h=<ips>&p=<port>&t=<one-time token>&fp=<cert sha256>&id=<agent id>`
+2. Token is single-use and expires in 120 s.
+3. Phone scans, connects over WSS, **verifies the fingerprint in its Rust TLS verifier** (not in JS), presents the token.
+4. Agent issues a long-lived 256-bit **device key**. Phone stores it encrypted (Android Keystore). Agent stores only a hash.
+5. Later connections: HMAC challenge-response. The key is never sent over the wire again.
+6. Agent UI lists paired devices with **Revoke** and **Revoke all**.
+
+---
+
+## 5. Feature Set
+
+### Core stats
+CPU (total, per-core, clock, temp), RAM, GPU (usage, VRAM, temp, NVIDIA via NVML), disks (usage + I/O), network up/down, ping, PC battery, uptime, top processes (tap to end an instance, with a protected-process list and an off switch).
+
+> CPU temps on Windows are unreliable via `sysinfo`. Treat as optional (LibreHardwareMonitor helper). Widget hides itself if no source exists.
+
+### Time & ambient
+Digital / analog / flip clocks, world clocks, date, weather (Agent fetches, 30 min cache), Pomodoro, timer, stopwatch, night mode that dims to a clock, ambient idle screen when the PC is offline.
+
+### Control
+Now playing + media controls + volume, quick actions (lock, mute, screenshot, sleep display, Wake-on-LAN), run script (opt-in).
+
+### Shortcuts (fully customizable)
+- Tiles: name, icon (emoji / upload / auto-extracted app icon), color, size
+- Actions: launch app, open URL, open folder, run command, keyboard macro, toggle
+- Groups and pages (e.g. "Dev", "Media")
+- Agent scans the Start Menu so you pick installed apps from a list
+- Per-tile options: confirm-before-run, cooldown, "is running" indicator
+- Phone only sends a shortcut **id**. Commands live on the PC (the phone never sees them)
+
+### Rules (when → then)
+Examples: AI session finished → switch to Agent page + vibrate. Game fullscreen → game layout. CPU above 90% for 15 s → pulse alert. Away N minutes → ambient page. 22:00 to 07:00 → night theme. Webhook value on → show notification.
+
+### Webhooks / CLI (PhoneBox-style API)
+```
+POST /api/push/<key>      # value widget
+POST /api/notify          # toast + vibration (+ page switch)
+POST /api/goto/<page>
+phonedeck notify --agent claude-code --title "Done" --kind done
+phonedeck ask "Run migration?" --timeout 60     # blocks until phone answers
+```
+Localhost needs no key. LAN senders use a separate **webhook key** that can never open the phone API.
+
+### Widget catalog (v1 target ≈ 28)
+Time: clock, analog, world clocks, time progress, pomodoro, timer, stopwatch · Sky: weather, forecast · Computer: metric tile, gauge, chart, memory & disks, top processes, network, now playing, volume, shortcut grid, big button, command · **AI: Agent Inbox, Agent sessions, Local LLM status** · Personal: note, checklist, counter, phone battery/temp · Data: pushed value, notification feed.
+
+---
+
+## 6. AI Agent Hub
+
+### 6.1 Goals
+1. **Task complete → "ready for review" notification**, shown even when the phone is dimmed
+2. Optional **approval requests** (approve / deny from the phone)
+3. A persistent **Review Inbox** so nothing gets forgotten
+
+### 6.2 Event model
+```
+AgentEvent {
+  id, ts, agent: "claude-code" | "codex" | "antigravity" | "local-llm" | string,
+  project, cwd,
+  kind: "done" | "needs_input" | "approval" | "error" | "working" | "idle",
+  title, summary,
+  stats?: { duration_s, files_changed, insertions, deletions },   // from git, see below
+  actions: ["open_editor","open_folder","approve","deny","mark_reviewed","snooze","dismiss"],
+  expires_at?
+}
+```
+
+### 6.3 Detection: two layers
+| Layer | How | Why |
+|---|---|---|
+| **Hooks** (precise, instant) | Claude Code hooks (`Stop`, `Notification`, `PreToolUse`) call `phonedeck`. Codex `notify` config does the same on turn complete. | Exact moment, can carry context, can block for approval |
+| **Watchers** (zero-config fallback) | `notify` crate watches `~/.claude/sessions` and `~/.codex/sessions`, debounced. | Works with no setup. PhoneBox reads these same folders, so the layout exists, but **verify the file formats on your machine** |
+
+Antigravity has no known hook API: use a best-effort adapter (process + window-title heuristic, plus a manual `phonedeck notify` you can bind to a task) and revisit if it ships hooks. Local LLMs (Ollama / LM Studio): poll their local API *only while the widget is visible* for loaded model, VRAM, and activity.
+
+### 6.4 The "done" notification (the good part)
+When a `done` event arrives, the Agent runs, **off the main thread with a 2 s timeout**:
+- `git diff --shortstat` and `git status --porcelain` in the session's `cwd`
+
+and the phone shows: **"claude-code finished in `phone-deck` · 6 files · +142 −38 · 4m 12s"**, with buttons **Open in editor**, **Open folder**, **Mark reviewed**, **Snooze 10m**.
+
+- Dimmed screen: wake it for `done` / `needs_input` / `error` (respecting rules and a Do-Not-Disturb schedule)
+- Distinct vibration patterns per kind
+- Coalescing: dedupe by `(agent, project, kind)` within 2 s so flapping sessions don't spam
+- **Review Inbox widget:** badge with the number of unreviewed completions, stays until you mark reviewed, survives restarts (SQLite)
+- History tab: past events and what you did with them
+
+### 6.5 Approvals (opt-in, safety first)
+- Claude Code `PreToolUse` hook calls `phonedeck ask`, which blocks until phone answers or times out (then falls back to the normal terminal prompt)
+- Phone shows the **exact command / diff summary**, never a vague "approve?"
+- Risky patterns (`rm -rf`, force push, DB drops) need a **hold-to-confirm** gesture, or are forced to "approve on PC only"
+- Only paired devices. Every decision logged on the Agent.
+- Verify the current hook schema in the Claude Code docs before wiring it
+
+---
+
+## 7. Theme & Design Direction
+
+Everything visual comes from one JSON theme + assets (hot-reload in dev, import/export as a single file).
+
+**Default theme "Void":** true black (OLED-friendly), one accent color, huge tabular numerals, hairline dividers, glow only on live/active elements, no card-shadow soup, no gradient-everything. Two more built-ins: "Paper" (light, e-ink feel) and "Neon Grid" (louder). Real skin comes later from your generated image through the **skin slot**: background, per-widget frames, fonts, accent.
+
+```jsonc
+{
+  "name": "void",
+  "background": { "type": "wallpaper", "ref": "aurora-lite", "dim": 0.35 },
+  "palette": { "accent": "#7C5CFF", "surface": "#000000", "text": "#EDEDF2" },
+  "type": { "display": "…", "mono": "…" },
+  "shape": { "radius": 14, "blur": 0, "glow": 0.5 },
+  "widgets": { "defaultStyle": "ring" },
+  "schedule": { "night": "22:00", "day": "07:00" },
+  "skin": { "image": null, "frames": {} }
+}
+```
+
+---
+
+## 8. Live Wallpaper Engine
+
+**Scope (v1):** an *in-app* live wallpaper, rendered behind the widgets on the Deck. That fits a phone dedicated to this app. A system-level Android wallpaper is a stretch goal (see end).
+
+### Wallpaper types
+| Type | Notes | Cost |
+|---|---|---|
+| Static + Ken Burns | slow pan/zoom of an image | lowest |
+| Video loop | MP4/WebM, muted, hardware-decoded, pre-scaled to screen res | low |
+| GPU shader preset | WebGL fragment shaders: aurora, flow field, starfield, nebula, grid | medium |
+| Particles / canvas | lightweight 2D | medium |
+| Lottie / animated WebP | vector or short loops | low to medium |
+| **Stats-reactive** | shader uniforms driven by live telemetry (CPU → speed, GPU → intensity, net → pulse, temp → hue), smoothed | medium |
+| Parallax | accelerometer-driven depth shift | low |
+| Time-of-day | scene crossfades with sunrise/sunset | low |
+
+### Wallpaper pack format
+A folder/zip: `manifest.json` (type, assets, fps cap, reactive bindings, dim, blur, safe-area) + assets. You import packs in the **PC editor**; the Agent sends them to the phone as a **chunked, checksummed file transfer**, cached on the phone by content hash (never re-sent).
+
+### Performance governor (this is what keeps the phone cool)
+Quality tiers: **High** (30 fps, scale 1.0) → **Balanced** (24 fps, 0.75) → **Eco** (12 fps, 0.5) → **Static**.
+
+The governor picks the tier from:
+- battery level and charging state
+- Android thermal status (Kotlin plugin, API 29+)
+- measured frame time (over budget for N frames → drop a tier; stable for M seconds → rise one, with hysteresis so it doesn't flap)
+- dim/ambient state (dim → Static or 1 fps)
+- page weight (heavy widget page → lower wallpaper tier)
+- Page Visibility (hidden → render loop fully stopped)
+
+Burn-in protection applies too: very slow drift of the whole composition, and true-black bias in the default packs.
+
+**Stretch (not v1):** a Kotlin `WallpaperService` inside the generated Android project (video/shader only) so the wallpaper also appears as the system wallpaper when the Deck app is closed. A WebView can't be hosted in a `WallpaperService` easily, so it would be a separate native renderer.
+
+---
+
+## 9. Android Hardening
+- Foreground service + `FLAG_KEEP_SCREEN_ON` so Android doesn't kill or sleep the panel
+- `WifiLock` (high performance) so Wi-Fi power-save doesn't add latency or drop the socket
+- `MulticastLock` while discovering, released after
+- Ask for the battery-optimization exemption (guide the user to the setting)
+- Kiosk-ish behavior: immersive fullscreen, landscape lock option, boot-on-charge optional
+- Battery care: dim schedule, optional "stop charging at 80%" tip (device-dependent), swelling warning in settings
+- ABIs: **arm64-v8a + armeabi-v7a** (old phones are often 32-bit), R8 minify, resource shrink
+- Self-update: Agent serves the APK over LAN; phone installs through the package installer (`REQUEST_INSTALL_PACKAGES`), signature must match
+
+---
+
+## 10. Optimization Playbook
+
+### Budgets (enforced in CI by `deck-sim`)
+| Metric | Target |
+|---|---|
+| Telemetry, active page | typical 100–300 B/s, **hard ceiling 1 KB/s** |
+| Telemetry, dimmed | < 0.2 KB/s |
+| Agent CPU, client connected | < 1% |
+| Agent CPU, no client | ~0% |
+| Agent RAM | < 60 MB |
+| Display frame time (widgets) | < 8 ms at 30 fps cap |
+| Wallpaper | governor-managed, never above 30 fps |
+| Cold reconnect | < 2 s on same Wi-Fi |
+
+### Network & protocol
+1. **Delta encoding:** send only fields that changed since the last acked state.
+2. **Dead-band thresholds per metric:** CPU only if |Δ| ≥ 1%, temp ≥ 1°C, net throughput bucketed on a log scale. Tiny jitter never hits the wire.
+3. **Integer field-ID dictionary + MessagePack** (no string keys), varint-friendly small ints, fixed-point instead of floats where precision allows (0.1% → u16).
+4. **Coalescing window (~50 ms):** batch near-simultaneous updates into one frame to avoid tiny packets and radio wakeups.
+5. **Priority lanes:** events preempt telemetry; telemetry is latest-wins (drop stale queued samples under backpressure).
+6. **Compression only where it pays:** LZ4/zstd for history backfill and wallpaper chunks, never for tiny telemetry frames.
+7. **No history streaming.** Phone keeps ring buffers; on connect the Agent sends **one** backfill downsampled with **LTTB** (Largest-Triangle-Three-Buckets) to ≤ 300 points per series.
+8. **Derive locally:** clock, uptime (from boot time), percentages from raw counters. If the phone can compute it, don't send it.
+9. **Config by content hash:** don't resend layouts/themes/wallpapers the phone already has.
+10. **Connection racing + backoff:** cached IP vs mDNS in parallel; exponential backoff with jitter; pause retries entirely when Wi-Fi is off.
+
+### Sensor sampling (Agent)
+11. **Subscription refcounting:** each visible widget subscribes to sensors; zero subscribers → sensor not polled. Only widgets on the **current page** count.
+12. **Adaptive sampling controller per sensor:** if |Δ| stays under the dead-band for N samples → `interval *= 1.5` up to a max; any big change → snap to the minimum interval. Quiet systems get polled rarely.
+13. **Expensive sensors on demand:** process list and command widgets run only while a phone is looking at them; results cached with a TTL.
+14. **Use the narrow `sysinfo` refresh calls** (refresh only CPU/mem/net as needed), not `refresh_all`.
+15. **Event-driven over polling:** file watchers (`notify`) with debounce for agent sessions; no folder scanning loops.
+16. **Zero-subscriber idle:** with no client connected, the sampler thread parks (no timers firing).
+
+### Display rendering
+17. **Rust core owns the socket and the state;** the UI gets **one batched update per animation frame**, only the keys that changed, via a Tauri Channel.
+18. **Interpolate, don't over-sample:** 1 Hz data drawn at 60 fps using a critically damped spring / lerp, so numbers and gauges look smooth with no extra network.
+19. **Per-widget selectors:** a widget re-renders only when its own keys change (Zustand selectors, `memo`).
+20. **Compositor-friendly animation:** `transform` and `opacity` only, `will-change` on a short leash, `contain: layout paint` on widgets, `content-visibility` for off-page content.
+21. **Canvas for charts** with LTTB downsampling to pixel width; typed-array ring buffers (no per-sample object allocation, near-zero GC).
+22. **One rAF loop** shared by all animating widgets; stops completely when nothing animates or the page is hidden.
+23. **Ambient mode:** 1 fps clock-only, wallpaper static, telemetry reduced to a heartbeat.
+
+### Build & binary
+24. Rust release profile: `lto = "fat"`, `codegen-units = 1`, `panic = "abort"`, `strip = true`, `opt-level = 3` for the Agent hot paths.
+25. Android: R8 + resource shrinking, split ABIs, WebP/AVIF assets, wallpaper videos capped (e.g. ≤ 15 MB, ≤ 1080p, 30 fps).
+26. Lazy-load widgets and wallpaper presets (dynamic imports) so cold start stays fast.
+
+### Measure, don't guess
+- In-app **debug overlay:** bytes/s per channel, tick rates, frame time, wallpaper tier, Agent CPU
+- `deck-sim` replays a scripted session headlessly and **fails CI** if any budget regresses
+- Property tests for the delta encoder (apply(delta(a, b), a) == b), golden tests for protocol compatibility
+
+---
+
+## 11. Security
+- Agent binds to the **LAN interface only**; localhost-only endpoints (settings, pairing, shortcut tests) reject foreign `Host` / cross-site `Origin` (DNS-rebinding and CSRF protection)
+- TLS with a **pinned self-signed cert**, device keys via challenge-response, revoke list
+- Phone sends only ids; commands and scripts are defined and stored on the PC
+- Webhook key separated from the device key; rotate independently
+- Process kill limited to your own session, protected-process denylist, switchable off
+- Approvals require the exact-command display and hold-to-confirm for risky patterns
+- Logs never contain keys or tokens
+
+---
+
+## 12. Testing, CI, Release
+- **Mock-first dev:** `deck-mock` serves fake telemetry/events so you can build UI in a desktop browser at phone size (landscape ~780×360 CSS px as a starting point; adjust for your phone)
+- Unit + property tests on `protocol`; integration tests with `deck-sim`
+- GitHub Actions: build the Windows installer (NSIS/MSI) and the signed APK, run budget checks
+- Signing: your own Android release key via env vars / Gradle properties (keep it, since updates must match the signature)
+- Windows: autostart on login (tauri-plugin-autostart), tray icon, single-instance
+- Linux AppImage and macOS builds are stretch after v1
+
+---
+
+## 13. Phases & Exit Criteria
+
+| Phase | Goal | Exit criteria |
+|---|---|---|
+| **0** Foundations | Monorepo, rules file, mock agent | Phone-size UI renders fake data in a browser |
+| **1** Protocol + link | Shared protocol, WSS, delta encoder | Real number streams PC → phone, tests pass |
+| **2** Pairing + security | QR, pinned TLS, discovery, revoke | Scan once, reconnects forever, revoke works |
+| **3** Telemetry + optimization | Sensors, subscriptions, adaptive sampling, overlay | CI proves < 1 KB/s and < 1% CPU |
+| **4** Display + widgets | Widget runtime, state store, core widgets | Real stats on the phone, smooth at 30 fps |
+| **5** Editor + themes | Drag/drop editor, theme engine, skin slot | Re-skin a page from JSON alone |
+| **6** AI Agent Hub | Hooks, watchers, done-notifications, inbox, approvals | Claude Code finishes → phone shows diff stats → tap opens editor |
+| **7** Live wallpaper | Engine, packs, governor, transfer | Stats-reactive wallpaper runs cool for an hour |
+| **8** Shortcuts + rules | Tiles, app scan, rules, quick actions | Daily-driver launcher + rule triggers |
+| **9** Hardening + packaging | Android native bits, installer, APK, CI, self-update | Fresh PC + fresh phone → working in 5 minutes |
+| **10** Skin | Apply your generated UI image | Flawless final look |
+
+**Definition of done (v1.0):** installer + signed APK from CI, QR pairing, all budgets green, ≥ 20 working widgets, agent-complete notifications with git summary, live wallpaper with governor, customizable shortcuts, 8-hour soak test with no leaks and no phone overheating.
+
+---
+
+## 14. Risks & Mitigations
+
+| Risk | Mitigation |
+|---|---|
+| Router AP isolation / guest Wi-Fi blocks phone → PC | Clear "can't reach PC" state with the likely cause |
+| Self-signed cert rejected in a WebView | Networking lives in the Rust core with a custom pinned verifier |
+| Raw multicast flaky on Android | `NsdManager` in Kotlin + cached-IP race + manual entry |
+| Windows temps unreliable | Optional helper, widget hides itself |
+| Always-charging phone battery | Dim schedule, charge-limit tip, thermal governor |
+| OLED burn-in | Pixel drift, auto-dim, true-black default |
+| Android kills the app | Foreground service, wake + Wi-Fi locks, battery exemption |
+| Agent hook formats change | Everything funnels through the generic `phonedeck` bridge; adapters stay thin; watchers as fallback |
+| Antigravity lacks hooks | Heuristic adapter + manual notify; re-check later |
+| Wallpaper cooks the phone | Governor with thermal + frame-time feedback |
+| 32-bit old phone | Build armeabi-v7a too |
+| Tauri Android rough edges | Keep native code in one Kotlin plugin; mock-first UI dev so most work needs no device |
+
+---
+
+## 15. Assumptions & Open Questions
+- Assumed: Windows PC, Android 9+ phone, same home Wi-Fi, landscape primary
+- Live wallpaper = **in-app** for v1 (system-level is a stretch goal)
+- Phone model, screen size, and OLED vs LCD aren't decided yet. They affect burn-in tactics, ABI choice, and layout sizes
+- Which editor opens on "Open in editor"? (VS Code / Antigravity CLI / other: configurable per project)
+
+---
+
+## 16. Antigravity Prompts (run in order, one phase at a time)
+
+> Tip: finish each phase, run it, commit, then paste the next prompt. If a phase goes sideways, paste the acceptance criteria back to the agent instead of piling on new asks.
+
+### P0: Rules + scaffold
+```
+You are building "Phone Deck": a Tauri 2 monorepo with two apps. (1) "Agent": Windows-first desktop app (tray, settings/editor window, pairing QR). (2) "Display": Android app (APK) that runs full-screen on an old phone as a Steam-Deck-style dashboard. Everything is local over Wi-Fi; no cloud.
+
+First, read /plan.md fully. Then:
+1. Create the repo layout from plan.md section 3 (crates/protocol, deck-cli, deck-mock, deck-sim; apps/agent, apps/display; packages/widgets, theme-engine, wallpaper, ui-kit; integrations; docs).
+2. Use React + Vite + TypeScript + Tailwind + Framer Motion for UIs, Zustand for state, Rust workspace for crates.
+3. Write a project rules file (whatever Antigravity uses for persistent rules) stating: always read plan.md first; follow the budgets in section 10; keep native code in one Kotlin plugin; never put secrets in logs; small commits per task.
+4. Add the Rust release profile from plan.md section 10 item 24.
+5. Make `pnpm dev` start the Agent UI and `pnpm dev:display` start the Display UI in a desktop browser at phone landscape size.
+Acceptance: both UIs render a placeholder, `cargo build --workspace` passes, README explains how to run everything. No features yet.
+```
+
+### P1: Protocol crate + mock agent
+```
+Implement crates/protocol per plan.md section 4: MessagePack envelope [type, seq, payload]; integer field-ID dictionary shared by Rust and generated TypeScript types (use ts-rs or specta); two channels (telemetry = lossy latest-wins, events = reliable ordered acked with resume via last_seq); a delta encoder with per-field dead-bands; protocol version field.
+Then build crates/deck-mock: a mock agent serving fake CPU/RAM/GPU/net/media telemetry and sample AgentEvents over WebSocket, so the Display UI can be built in a browser with no PC or phone.
+Add tests: roundtrip tests, a property test that apply(delta(a,b), a) == b, and golden-bytes tests for protocol stability.
+Acceptance: `cargo test -p protocol` is green; the Display UI placeholder shows live fake numbers from deck-mock.
+```
+
+### P2: Pairing, TLS, discovery, security
+```
+Implement secure pairing per plan.md section 4 "Pairing". Agent: generate a self-signed cert with rcgen on first run, run a LAN-only WSS server (axum + rustls), show a QR (phonedeck://pair?h=<ips>&p=<port>&t=<one-time token>&fp=<cert sha256>&id=<agent id>) with a 120s single-use token. Display: scan the QR (Tauri barcode-scanner plugin), and do ALL networking in the Rust core with a custom rustls verifier that pins the fingerprint (the WebView must never touch the socket). Issue a 256-bit device key; store it encrypted via Android Keystore (Kotlin plugin); authenticate later with HMAC challenge-response. Agent stores only a hash. Add a paired-devices list with Revoke and Revoke all. Discovery: advertise with mdns-sd on the Agent; on Android use NsdManager from the Kotlin plugin; on reconnect race the cached IP against mDNS and take the first success; exponential backoff with jitter. Reject foreign Host/Origin headers on localhost-only endpoints.
+Acceptance: scan once, kill and restart both sides, phone reconnects automatically; a revoked phone is refused; a wrong fingerprint is refused.
+```
+
+### P3: Telemetry + optimization core
+```
+Implement the sensor and optimization core per plan.md sections 5 and 10. Agent sensors via sysinfo (use narrow refresh calls, never refresh_all): CPU total/per-core/clock, RAM, disks, network, uptime, top processes; optional NVML GPU; optional temperature source that hides itself if absent. Implement: subscription refcounting (a sensor polls only if a visible widget on the CURRENT page subscribes), an adaptive sampling controller per sensor (back off x1.5 up to a max when values are quiet, snap to min on change), sampler thread that parks with zero subscribers/clients, per-metric dead-bands, delta-only telemetry, 50 ms coalescing window, priority lanes (events preempt telemetry), and a history backfill sent once on connect, downsampled with LTTB to <=300 points per series. Build crates/deck-sim, a headless fake phone that measures bytes/sec and Agent CPU, and add a debug overlay in Display showing bytes/s per channel, tick rates, and frame time.
+Acceptance: deck-sim shows <1 KB/s on an active page, <0.2 KB/s dimmed, Agent <1% CPU connected and ~0% with no client; a CI job fails if budgets regress.
+```
+
+### P4: Display runtime + widgets
+```
+Build the Display app shell and widget runtime. Rust core owns the socket and state store and pushes ONE batched update per animation frame containing only changed keys to the UI via a Tauri Channel. UI: Zustand with per-widget selectors, memoized widgets, one shared requestAnimationFrame loop that stops when nothing animates or the page is hidden. Interpolate 1 Hz data with a critically damped spring so gauges look smooth at 30 fps with no extra network. Typed-array ring buffers for history and canvas charts with LTTB downsampling to pixel width. Implement the widget contract { needs, create(box, ctx) -> { update(kind) } } with a widgets.json catalog (name, size, options) like plan.md section 2. Build widgets: clock (digital/analog/flip), metric tile, gauge, chart, memory & disks, network, top processes, uptime, phone battery/temp. Swipeable pages on a 12x6 grid, page dots, volume-key paging option, night mode dim-to-clock, and 1 fps ambient mode.
+Design: minimal and opinionated per plan.md section 7 ("Void" theme: true black, one accent, huge tabular numerals, hairline dividers). It must NOT look like a generic dashboard template.
+Acceptance: real PC stats on the phone, smooth, widget frame time <8 ms, no re-render of widgets whose keys did not change.
+```
+
+### P5: Layout editor + theme engine
+```
+In the Agent app, build the visual layout editor: a phone-sized canvas where I drag to move and drag corners to resize widgets (dnd-kit), a searchable widget palette grouped by category from widgets.json, per-widget options, pages with add/reorder/show-hide, and starter page templates. Build packages/theme-engine: a JSON theme schema with validation, hot reload in dev, import/export as a single file, day/night schedule, and a "skin slot" (background image + per-widget frame images + font + accent) so an externally generated UI image can be dropped in with no code changes. Config syncs to the phone by content hash (phone sends its hash, Agent sends only on mismatch). Ship three built-in themes: Void (default), Paper, Neon Grid.
+Acceptance: re-skin a whole page from a JSON file alone; the phone picks up layout changes within ~2 seconds; unchanged config is never resent.
+```
+
+### P6: AI Agent Hub
+```
+Build the AI Agent Hub per plan.md section 6. Agent: localhost HTTP bridge + the `phonedeck` CLI (crates/deck-cli) with `notify` and `ask` (blocks until the phone answers, with timeout fallback), and the PhoneBox-style endpoints /api/push/<key>, /api/notify, /api/goto/<page>. Integrations in /integrations: Claude Code hook scripts (Stop, Notification, PreToolUse) and a Codex `notify` adapter; verify the current hook schemas against the official docs before writing them. Add a zero-config watcher using the `notify` crate (debounced) on ~/.claude/sessions and ~/.codex/sessions; inspect the real files on this machine first and document the formats. Best-effort Antigravity adapter (process/window heuristic + manual notify). Local LLM status widget (Ollama/LM Studio local API polled only while visible).
+On a `done` event, in a background task with a 2 s timeout, run `git diff --shortstat` and `git status --porcelain` in the session cwd and attach files changed / insertions / deletions / duration. Phone: a notification that wakes the dimmed screen (respect a Do-Not-Disturb schedule and rules), distinct vibration per kind, dedupe by (agent, project, kind) within 2 s, buttons Open in editor / Open folder / Mark reviewed / Snooze 10m. Add the Agent Inbox widget (badge of unreviewed completions, persisted in SQLite) and a history tab. Approvals: exact command/diff summary, hold-to-confirm for risky patterns, only from paired devices, every decision logged.
+Acceptance: Claude Code finishes a task -> within ~1 s the phone shows "finished in <project> · N files · +X −Y · duration" -> tapping Open in editor opens the project on the PC.
+```
+
+### P7: Live wallpaper engine
+```
+Build packages/wallpaper per plan.md section 8 (in-app live wallpaper behind the widgets). Types: static + Ken Burns, video loop (hardware-decoded <video>, muted), WebGL shader presets (aurora, flow field, starfield, nebula, grid), particles, Lottie/animated WebP, parallax via DeviceMotion, time-of-day. Add STATS-REACTIVE bindings: shader uniforms driven by smoothed live telemetry (CPU -> speed, GPU -> intensity, net -> pulse, temp -> hue) declared in the pack manifest. Pack format: folder/zip with manifest.json (type, assets, fps cap, bindings, dim, blur). The Agent editor imports packs; the Agent sends them to the phone as chunked, checksummed, LZ4-compressed transfers, cached on the phone by content hash and never re-sent.
+Implement the performance governor: tiers High (30 fps, scale 1.0) / Balanced (24, 0.75) / Eco (12, 0.5) / Static; driven by battery + charging state, Android thermal status (Kotlin plugin), measured frame time with hysteresis, dim/ambient state, page weight, and Page Visibility (hidden = render loop stopped). Add slow composition drift for OLED burn-in protection.
+Acceptance: a stats-reactive wallpaper runs for 1 hour on the phone without thermal throttling, drops tiers automatically when it warms up, and goes fully static in ambient mode.
+```
+
+### P8: Shortcuts, rules, quick actions
+```
+Build customizable app shortcuts and rules per plan.md section 5. Shortcut tiles: name, icon (emoji / upload / auto-extracted app icon), color, size; actions: launch app, open URL, open folder, run command, keyboard macro, toggle; groups and pages; the Agent scans the Start Menu so I pick installed apps from a list; per-tile confirm-before-run, cooldown, and an "is running" indicator. The phone sends only a shortcut ID; commands live on the PC. Quick actions: lock PC, mute, media controls + volume, screenshot, display off, Wake-on-LAN, opt-in run-script. Rules engine with a simple JSON when->then format: AI session done/needs input -> show page + vibrate; fullscreen game -> game layout; CPU > N% for 15 s -> pulse alert; away N minutes -> ambient page; time window -> night theme; webhook value on -> notification; with an "only while it lasts" option that restores the previous page.
+Acceptance: I can build a Dev page of app shortcuts from the editor in under 2 minutes and a rule fires correctly; a Test button exists for every rule.
+```
+
+### P9: Android hardening, packaging, CI, self-update
+```
+Harden and ship per plan.md sections 9 and 12. Kotlin plugin: foreground service, FLAG_KEEP_SCREEN_ON, high-performance WifiLock, MulticastLock only while discovering, battery-optimization exemption flow, immersive fullscreen + landscape lock option, optional launch-on-charge. Build the APK for arm64-v8a AND armeabi-v7a with R8 minify and resource shrinking, signed with a release key from env vars/Gradle properties. Windows Agent: NSIS/MSI installer, tray, single instance, autostart (tauri-plugin-autostart). Self-update: the Agent serves the new APK over LAN with a checksum and the phone installs it via the package installer; the Agent app itself updates with tauri-plugin-updater. GitHub Actions: build the installer and signed APK, run tests, and run the deck-sim budget checks. Add an 8-hour soak test script that tracks memory growth and reconnect counts.
+Acceptance: a fresh PC + fresh phone go from install to a working paired Deck in about 5 minutes; soak test shows no memory growth; budgets stay green in CI.
+```
+
+### P10: Apply the generated UI skin
+```
+I will give you a generated UI image. Turn it into a theme skin for Phone Deck using the skin slot in the theme engine: slice the image into background + widget frames + any decorative layers as optimized assets (WebP, sized for the phone's screen), extract the palette and map it to theme tokens, pick a matching display + mono font, and produce a single importable theme file. Do not change widget logic. Preserve legibility of the numerals, keep true-black areas where the image allows (OLED), and make sure the wallpaper governor still works with the skin. Show before/after screenshots at phone landscape size.
+Acceptance: importing the one theme file re-skins the whole Deck; frame time stays within budget.
+```

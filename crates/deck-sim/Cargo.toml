@@ -1,0 +1,12 @@
+[package]
+name = "deck-sim"
+version = "0.1.0"
+edition = "2021"
+description = "Headless Phone Deck simulator to enforce telemetry and performance budgets in CI"
+
+[dependencies]
+protocol = { path = "../protocol" }
+
+[[bin]]
+name = "deck-sim"
+path = "src/main.rs"

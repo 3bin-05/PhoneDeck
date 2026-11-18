@@ -1,0 +1,12 @@
+[package]
+name = "deck-cli"
+version = "0.1.0"
+edition = "2021"
+description = "phonedeck CLI bridge for notifications, asks, and webhooks"
+
+[dependencies]
+protocol = { path = "../protocol" }
+
+[[bin]]
+name = "phonedeck"
+path = "src/main.rs"

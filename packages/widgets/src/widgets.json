@@ -1,0 +1,46 @@
+{
+  "$schema": "./widgets.schema.json",
+  "version": "1.0",
+  "widgets": [
+    {
+      "id": "clock-digital",
+      "name": "Digital Clock",
+      "category": "time",
+      "defaultSize": { "w": 4, "h": 2 },
+      "minSize": { "w": 2, "h": 1 },
+      "needs": []
+    },
+    {
+      "id": "cpu-metric",
+      "name": "CPU Usage",
+      "category": "computer",
+      "defaultSize": { "w": 3, "h": 2 },
+      "minSize": { "w": 2, "h": 2 },
+      "needs": ["cpu_total", "cpu_freq", "cpu_temp"]
+    },
+    {
+      "id": "ram-metric",
+      "name": "Memory Stats",
+      "category": "computer",
+      "defaultSize": { "w": 3, "h": 2 },
+      "minSize": { "w": 2, "h": 2 },
+      "needs": ["ram_used", "ram_total"]
+    },
+    {
+      "id": "gpu-metric",
+      "name": "GPU Stats",
+      "category": "computer",
+      "defaultSize": { "w": 3, "h": 2 },
+      "minSize": { "w": 2, "h": 2 },
+      "needs": ["gpu_usage", "gpu_vram", "gpu_temp"]
+    },
+    {
+      "id": "agent-inbox",
+      "name": "Agent Review Inbox",
+      "category": "ai",
+      "defaultSize": { "w": 6, "h": 3 },
+      "minSize": { "w": 4, "h": 2 },
+      "needs": ["agent_events"]
+    }
+  ]
+}
