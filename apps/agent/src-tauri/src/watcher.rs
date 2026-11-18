@@ -10,7 +10,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex;
 
 pub fn spawn_session_watcher(hub: Arc<AgentHub>) {
-    tokio::spawn(async move {
+    tauri::async_runtime::spawn(async move {
         let home_dir = match std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")) {
             Ok(h) => PathBuf::from(h),
             Err(_) => return,

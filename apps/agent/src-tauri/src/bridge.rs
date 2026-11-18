@@ -326,7 +326,7 @@ pub async fn start_http_bridge(state: BridgeState) -> Result<(), String> {
         .with_state(state)
         .layer(CorsLayer::permissive());
 
-    tokio::spawn(async move {
+    tauri::async_runtime::spawn(async move {
         if let Err(e) = axum::serve(listener, app).await {
             log::error!("[Bridge] Server error: {}", e);
         }

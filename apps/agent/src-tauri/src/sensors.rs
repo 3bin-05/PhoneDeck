@@ -102,8 +102,8 @@ impl TelemetryHub {
 /// Parks completely (~0% CPU) when zero clients or subscribers exist.
 pub fn spawn_sampler_thread(
     hub: Arc<TelemetryHub>,
-) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
+) {
+    tauri::async_runtime::spawn(async move {
         log::info!("[Sampler] Sampler thread initialized with adaptive backoff & parking");
 
         let mut sys = System::new();
@@ -249,5 +249,5 @@ pub fn spawn_sampler_thread(
             // Sleep 50ms coalescing window before next evaluation
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
-    })
+    });
 }

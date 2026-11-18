@@ -430,7 +430,7 @@ impl AppRegistryManager {
 
         // Start background polling loop for subscribed apps (adaptive 1..5 s)
         let loop_mgr = mgr.clone();
-        tokio::spawn(async move {
+        tauri::async_runtime::spawn(async move {
             loop_mgr.run_polling_loop().await;
         });
 

@@ -142,7 +142,7 @@ pub async fn start_wss_server(
         .with_state(state)
         .layer(CorsLayer::permissive());
 
-    tokio::spawn(async move {
+    tauri::async_runtime::spawn(async move {
         let auto_server = auto::Builder::new(TokioExecutor::new());
 
         loop {
@@ -158,7 +158,7 @@ pub async fn start_wss_server(
             let app = app.clone();
             let auto_server = auto_server.clone();
 
-            tokio::spawn(async move {
+            tauri::async_runtime::spawn(async move {
                 let tls_stream = match acceptor.accept(stream).await {
                     Ok(s) => s,
                     Err(e) => {
@@ -356,7 +356,7 @@ async fn handle_auth_and_stream_socket(mut socket: WebSocket, state: ServerState
     let mut rx = state.telemetry_hub.telemetry_tx.subscribe();
     let mut event_rx = state.hub.event_tx.subscribe();
 
-    let send_task = tokio::spawn(async move {
+    let send_task = tauri::async_runtime::spawn(async move {
         loop {
             tokio::select! {
                 Ok(bytes) = rx.recv() => {
@@ -381,7 +381,7 @@ async fn handle_auth_and_stream_socket(mut socket: WebSocket, state: ServerState
     let agent_hub_clone = state.hub.clone();
     let media_clone = state.media.clone();
     let app_registry_clone = state.app_registry.clone();
-    let recv_task = tokio::spawn(async move {
+    let recv_task = tauri::async_runtime::spawn(async move {
         while let Some(Ok(msg)) = receiver.next().await {
             match msg {
                 Message::Text(text) => {
@@ -441,7 +441,7 @@ async fn handle_auth_and_stream_socket(mut socket: WebSocket, state: ServerState
                             let app_id_owned = app_id.to_string();
                             let action_owned = action.to_string();
                             let ql_owned = ql.map(|s| s.to_string());
-                            tokio::spawn(async move {
+                            tauri::async_runtime::spawn(async move {
                                 let _ = app_reg
                                     .execute_action(&app_id_owned, &action_owned, ql_owned.as_deref())
                                     .await;
