@@ -129,6 +129,8 @@ async fn test_pairing_tls_challenge_response_and_revocation() {
         pairing: pairing_mgr.clone(),
         telemetry_hub: Arc::new(telemetry_hub),
         hub: Arc::new(agent_lib::hub::AgentHub::new()),
+        shortcuts: Arc::new(agent_lib::shortcuts::ShortcutManager::new()),
+        rules: Arc::new(agent_lib::rules::RulesEngine::new()),
         agent_id: agent_id.clone(),
     };
     let tls_acceptor = TlsAcceptor::from(tls_mgr.server_config.clone());

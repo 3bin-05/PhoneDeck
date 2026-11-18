@@ -13,6 +13,7 @@ import {
   SystemUptimeWidget,
   PhoneStatusWidget,
   AgentInboxWidget,
+  ShortcutGridWidget,
 } from '@phone-deck/widgets';
 import { useMetric, useEvents, useDeckStore } from './deckStore';
 
@@ -288,3 +289,28 @@ export const AgentInboxContainer: React.FC = React.memo(() => {
   );
 });
 AgentInboxContainer.displayName = 'AgentInboxContainer';
+
+/**
+ * Customizable Shortcuts & Controls Container
+ */
+export const ShortcutGridContainer: React.FC = React.memo(() => {
+  const theme = useDeckStore((s) => s.theme);
+
+  const handleExecuteShortcut = async (id: string) => {
+    try {
+      await fetch(`http://127.0.0.1:8767/api/shortcut/${id}`, {
+        method: 'POST',
+      });
+    } catch {
+      console.log('Shortcut executed in simulation:', id);
+    }
+  };
+
+  return (
+    <ShortcutGridWidget
+      accentColor={theme.palette.accent}
+      onExecuteShortcut={handleExecuteShortcut}
+    />
+  );
+});
+ShortcutGridContainer.displayName = 'ShortcutGridContainer';

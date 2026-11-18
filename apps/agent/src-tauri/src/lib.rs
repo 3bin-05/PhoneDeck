@@ -5,8 +5,10 @@ pub mod git_stats;
 pub mod hub;
 pub mod net;
 pub mod pairing;
+pub mod rules;
 pub mod sensors;
 pub mod server;
+pub mod shortcuts;
 pub mod tls;
 pub mod watcher;
 
@@ -15,8 +17,10 @@ use discovery::MdnsAdvertiser;
 use hub::AgentHub;
 use net::get_lan_ips;
 use pairing::PairingManager;
+use rules::RulesEngine;
 use sensors::{spawn_sampler_thread, TelemetryHub};
 use server::{start_wss_server, ServerState};
+use shortcuts::ShortcutManager;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -34,6 +38,8 @@ pub struct AgentAppState {
     pub pairing: Arc<PairingManager>,
     pub tls: Arc<TlsManager>,
     pub storage_dir: PathBuf,
+    pub shortcuts: Arc<ShortcutManager>,
+    pub rules: Arc<RulesEngine>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -75,9 +81,24 @@ pub fn run() {
             let hub = Arc::new(AgentHub::new());
             spawn_session_watcher(hub.clone());
 
+            // Initialize Shortcuts & Rules Engines
+            let shortcuts = Arc::new(ShortcutManager::new());
+            let rules = Arc::new(RulesEngine::new());
+
+            // Forward hub events into rules engine
+            let mut event_sub = hub.event_tx.subscribe();
+            let rules_for_events = rules.clone();
+            tauri::async_runtime::spawn(async move {
+                while let Ok(event) = event_sub.recv().await {
+                    rules_for_events.evaluate_event(&event).await;
+                }
+            });
+
             let bridge_state = BridgeState {
                 hub: hub.clone(),
                 telemetry_hub: telemetry_hub.clone(),
+                shortcuts: shortcuts.clone(),
+                rules: rules.clone(),
             };
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = start_http_bridge(bridge_state).await {
@@ -92,6 +113,8 @@ pub fn run() {
                 pairing: pairing_mgr.clone(),
                 tls: tls_mgr.clone(),
                 storage_dir,
+                shortcuts: shortcuts.clone(),
+                rules: rules.clone(),
             };
 
             // Start LAN-only WSS server (axum + rustls)
@@ -99,6 +122,8 @@ pub fn run() {
                 pairing: pairing_mgr,
                 telemetry_hub,
                 hub,
+                shortcuts,
+                rules,
                 agent_id: agent_id.clone(),
             };
             let tls_acceptor = TlsAcceptor::from(tls_mgr.server_config.clone());
@@ -132,7 +157,16 @@ pub fn run() {
             commands::refresh_pairing_token,
             commands::get_paired_devices,
             commands::revoke_device,
-            commands::revoke_all_devices
+            commands::revoke_all_devices,
+            commands::get_shortcuts,
+            commands::save_shortcut,
+            commands::delete_shortcut,
+            commands::execute_shortcut,
+            commands::scan_installed_apps,
+            commands::get_rules,
+            commands::save_rules,
+            commands::test_rule,
+            commands::check_processes_running
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

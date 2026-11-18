@@ -31,7 +31,6 @@ import { ApprovalDialog } from './ApprovalDialog';
 import {
   DigitalClockContainer,
   AnalogClockContainer,
-  FlipClockContainer,
   CpuGaugeContainer,
   CpuTileContainer,
   RamTileContainer,
@@ -43,6 +42,7 @@ import {
   SystemUptimeContainer,
   PhoneStatusContainer,
   AgentInboxContainer,
+  ShortcutGridContainer,
 } from './WidgetContainers';
 
 interface ConnectionStatus {
@@ -425,23 +425,18 @@ export default function App() {
                 <AgentInboxContainer />
               </div>
 
-              {/* Top Processes (col 7..12, row 1..3) */}
+              {/* Custom Shortcuts Grid (col 7..12, row 1..3) */}
               <div className="col-span-6 row-span-3">
+                <ShortcutGridContainer />
+              </div>
+
+              {/* Top Processes (col 1..7, row 4..6) */}
+              <div className="col-span-7 row-span-3">
                 <TopProcessesContainer />
               </div>
 
-              {/* Flip Clock (col 1..4, row 4..6) */}
-              <div className="col-span-4 row-span-3">
-                <FlipClockContainer />
-              </div>
-
-              {/* CPU Load History (col 5..9, row 4..6) */}
+              {/* Phone Status (col 8..12, row 4..6) */}
               <div className="col-span-5 row-span-3">
-                <CpuHistoryContainer />
-              </div>
-
-              {/* Phone Status (col 10..12, row 4..6) */}
-              <div className="col-span-3 row-span-3">
                 <PhoneStatusContainer />
               </div>
             </motion.div>

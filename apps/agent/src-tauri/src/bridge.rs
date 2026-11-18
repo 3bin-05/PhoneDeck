@@ -20,6 +20,8 @@ pub const HTTP_BRIDGE_PORT: u16 = 8767;
 pub struct BridgeState {
     pub hub: Arc<AgentHub>,
     pub telemetry_hub: Arc<TelemetryHub>,
+    pub shortcuts: Arc<crate::shortcuts::ShortcutManager>,
+    pub rules: Arc<crate::rules::RulesEngine>,
 }
 
 #[derive(Deserialize)]
@@ -87,6 +89,7 @@ pub async fn start_http_bridge(state: BridgeState) -> Result<(), String> {
                         s.telemetry_hub
                             .push_custom_metric(key, MetricValue::String(body.trim().to_string()));
                     }
+                    s.rules.evaluate_webhook(&key.to_string(), body.trim()).await;
                     (StatusCode::OK, "OK").into_response()
                 },
             ),
@@ -199,9 +202,57 @@ pub async fn start_http_bridge(state: BridgeState) -> Result<(), String> {
                     if !verify_localhost(&headers) {
                         return (StatusCode::FORBIDDEN, "Forbidden").into_response();
                     }
-                    let cwd = payload.cwd.as_deref().unwrap_or(".");
-                    match s.hub.execute_action(&payload.action, cwd) {
-                        Ok(()) => (StatusCode::OK, "OK").into_response(),
+                    if payload.action.starts_with("shortcut:") {
+                        let id = &payload.action["shortcut:".len()..];
+                        match s.shortcuts.execute(id).await {
+                            Ok(msg) => (StatusCode::OK, msg).into_response(),
+                            Err(e) => (StatusCode::BAD_REQUEST, e).into_response(),
+                        }
+                    } else if payload.action.starts_with("rule_test:") {
+                        let id = &payload.action["rule_test:".len()..];
+                        match s.rules.test_rule(id).await {
+                            Ok(_) => (StatusCode::OK, "Rule tested").into_response(),
+                            Err(e) => (StatusCode::BAD_REQUEST, e).into_response(),
+                        }
+                    } else {
+                        let cwd = payload.cwd.as_deref().unwrap_or(".");
+                        match s.hub.execute_action(&payload.action, cwd) {
+                            Ok(()) => (StatusCode::OK, "OK").into_response(),
+                            Err(e) => (StatusCode::BAD_REQUEST, e).into_response(),
+                        }
+                    }
+                },
+            ),
+        )
+        // POST /api/shortcut/{id}
+        .route(
+            "/api/shortcut/{id}",
+            post(
+                |headers: HeaderMap,
+                 Path(id): Path<String>,
+                 State(s): State<BridgeState>| async move {
+                    if !verify_localhost(&headers) {
+                        return (StatusCode::FORBIDDEN, "Forbidden").into_response();
+                    }
+                    match s.shortcuts.execute(&id).await {
+                        Ok(msg) => (StatusCode::OK, msg).into_response(),
+                        Err(e) => (StatusCode::BAD_REQUEST, e).into_response(),
+                    }
+                },
+            ),
+        )
+        // POST /api/rule/test/{id}
+        .route(
+            "/api/rule/test/{id}",
+            post(
+                |headers: HeaderMap,
+                 Path(id): Path<String>,
+                 State(s): State<BridgeState>| async move {
+                    if !verify_localhost(&headers) {
+                        return (StatusCode::FORBIDDEN, "Forbidden").into_response();
+                    }
+                    match s.rules.test_rule(&id).await {
+                        Ok(_) => (StatusCode::OK, "OK").into_response(),
                         Err(e) => (StatusCode::BAD_REQUEST, e).into_response(),
                     }
                 },

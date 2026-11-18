@@ -105,6 +105,14 @@
       "defaultSize": { "w": 6, "h": 3 },
       "minSize": { "w": 4, "h": 2 },
       "needs": []
+    },
+    {
+      "id": "shortcut-grid",
+      "name": "Custom Shortcuts Grid",
+      "category": "computer",
+      "defaultSize": { "w": 6, "h": 3 },
+      "minSize": { "w": 4, "h": 2 },
+      "needs": []
     }
   ]
 }

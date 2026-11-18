@@ -28,6 +28,8 @@ pub struct ServerState {
     pub pairing: Arc<PairingManager>,
     pub telemetry_hub: Arc<TelemetryHub>,
     pub hub: Arc<crate::hub::AgentHub>,
+    pub shortcuts: Arc<crate::shortcuts::ShortcutManager>,
+    pub rules: Arc<crate::rules::RulesEngine>,
     pub agent_id: String,
 }
 

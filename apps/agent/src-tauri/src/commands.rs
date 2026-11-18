@@ -1,10 +1,13 @@
 use crate::net::get_lan_ips;
 use crate::pairing::PairedDeviceInfo;
+use crate::rules::{RuleAction, RuleDefinition};
+use crate::shortcuts::{InstalledApp, ShortcutItem, ShortcutManager};
 use crate::AgentAppState;
 use protocol::PairUri;
 use qrcode::render::svg;
 use qrcode::QrCode;
 use serde::Serialize;
+use std::collections::HashMap;
 use tauri::State;
 
 #[derive(Debug, Clone, Serialize)]
@@ -91,4 +94,52 @@ pub fn revoke_device(state: State<'_, AgentAppState>, device_id: String) -> bool
 #[tauri::command]
 pub fn revoke_all_devices(state: State<'_, AgentAppState>) {
     state.pairing.revoke_all();
+}
+
+#[tauri::command]
+pub async fn get_shortcuts(state: State<'_, AgentAppState>) -> Result<Vec<ShortcutItem>, String> {
+    Ok(state.shortcuts.get_all().await)
+}
+
+#[tauri::command]
+pub async fn save_shortcut(state: State<'_, AgentAppState>, shortcut: ShortcutItem) -> Result<(), String> {
+    state.shortcuts.add_or_update(shortcut).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn delete_shortcut(state: State<'_, AgentAppState>, id: String) -> Result<bool, String> {
+    Ok(state.shortcuts.remove(&id).await)
+}
+
+#[tauri::command]
+pub async fn execute_shortcut(state: State<'_, AgentAppState>, id: String) -> Result<String, String> {
+    state.shortcuts.execute(&id).await
+}
+
+#[tauri::command]
+pub fn scan_installed_apps() -> Vec<InstalledApp> {
+    ShortcutManager::scan_installed_apps()
+}
+
+#[tauri::command]
+pub async fn get_rules(state: State<'_, AgentAppState>) -> Result<Vec<RuleDefinition>, String> {
+    Ok(state.rules.get_rules().await)
+}
+
+#[tauri::command]
+pub async fn save_rules(state: State<'_, AgentAppState>, rules: Vec<RuleDefinition>) -> Result<(), String> {
+    state.rules.set_rules(rules).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn test_rule(state: State<'_, AgentAppState>, rule_id: String) -> Result<RuleAction, String> {
+    state.rules.test_rule(&rule_id).await
+}
+
+#[tauri::command]
+pub fn check_processes_running(process_names: Vec<String>) -> HashMap<String, bool> {
+    let mut sys = sysinfo::System::new();
+    ShortcutManager::check_processes_running(&mut sys, &process_names)
 }

@@ -7,6 +7,7 @@ export * from './components/MetricWidgets';
 export * from './components/HistoryChartWidget';
 export * from './components/SystemWidgets';
 export * from './components/AgentInboxWidget';
+export * from './components/ShortcutGridWidget';
 
 import {
   DigitalClockWidget,
@@ -26,6 +27,7 @@ import {
   PhoneStatusWidget,
 } from './components/SystemWidgets';
 import { AgentInboxWidget } from './components/AgentInboxWidget';
+import { ShortcutGridWidget } from './components/ShortcutGridWidget';
 
 export interface WidgetCatalogEntry {
   id: string;
@@ -218,5 +220,17 @@ export const WIDGET_REGISTRY: Record<string, (box: WidgetBox, ctx: WidgetContext
   'agent-inbox': (_box, _ctx) => ({
     needs: [],
     render: () => React.createElement(AgentInboxWidget),
+  }),
+
+  'shortcut-grid': (_box, ctx) => ({
+    needs: [],
+    render: () =>
+      React.createElement(ShortcutGridWidget, {
+        onExecuteShortcut: (id: string) => {
+          if (ctx.sendAction) {
+            ctx.sendAction(`shortcut:${id}`);
+          }
+        },
+      }),
   }),
 };
