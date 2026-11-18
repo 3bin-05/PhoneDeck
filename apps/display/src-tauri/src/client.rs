@@ -35,6 +35,7 @@ pub struct ConnectionStatus {
     pub agent_id: Option<String>,
     pub active_host: Option<String>,
     pub error: Option<String>,
+    pub protocol_incompatible: bool,
 }
 
 pub struct DisplayClientManager {
@@ -235,11 +236,8 @@ impl DisplayClientManager {
         let proof = create_auth_proof(&client_key, &nonce_bytes);
         let proof_hex = hex::encode(proof);
 
-        // 3. Send AuthResponse
-        let auth_resp = AuthResponse {
-            device_id: config.device_id.clone(),
-            proof: proof_hex,
-        };
+        // 3. Send AuthResponse with client protocol version
+        let auth_resp = AuthResponse::new(config.device_id.clone(), proof_hex);
         ws_stream
             .send(Message::Text(serde_json::to_string(&auth_resp).unwrap().into()))
             .await
@@ -259,6 +257,10 @@ impl DisplayClientManager {
             }
             _ => return Err("Unexpected message for auth result".to_string()),
         };
+
+        if !result.protocol_compatible {
+            return Err("PROTOCOL_INCOMPATIBLE: Protocol version mismatch. An update is required to connect.".to_string());
+        }
 
         if !result.success {
             return Err(result

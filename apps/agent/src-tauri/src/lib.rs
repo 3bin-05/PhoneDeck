@@ -12,6 +12,7 @@ pub mod sensors;
 pub mod server;
 pub mod shortcuts;
 pub mod tls;
+pub mod updater;
 pub mod watcher;
 
 use bridge::{start_http_bridge, BridgeState};
@@ -26,9 +27,11 @@ use shortcuts::ShortcutManager;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use tauri::Manager;
 use tls::TlsManager;
 use tokio_rustls::TlsAcceptor;
+use updater::AgentUpdaterManager;
 use watcher::spawn_session_watcher;
 
 pub const AGENT_PORT: u16 = 8766;
@@ -44,6 +47,8 @@ pub struct AgentAppState {
     pub rules: Arc<RulesEngine>,
     pub media: Arc<media_session::MediaSessionManager>,
     pub app_registry: Arc<app_registry::AppRegistryManager>,
+    pub updater: Arc<AgentUpdaterManager>,
+    pub hub: Arc<AgentHub>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -90,6 +95,38 @@ pub fn run() {
             let rules = Arc::new(RulesEngine::new());
             let media = media_session::MediaSessionManager::new(telemetry_hub.clone());
             let app_registry = app_registry::AppRegistryManager::new(telemetry_hub.clone(), media.clone());
+            let updater = Arc::new(AgentUpdaterManager::new(&storage_dir, env!("CARGO_PKG_VERSION")));
+
+            // Record startup health
+            let updater_health = updater.clone();
+            tauri::async_runtime::spawn(async move {
+                updater_health.record_startup().await;
+            });
+
+            // Register desktop updater plugin
+            #[cfg(desktop)]
+            {
+                if let Err(e) = app.handle().plugin(tauri_plugin_updater::Builder::new().build()) {
+                    log::warn!("[Agent] Updater plugin registration note: {}", e);
+                }
+            }
+
+            // Periodic auto-update check loop (every 6h with jitter)
+            let updater_loop = updater.clone();
+            let app_handle_for_updater = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                // Initial delay before first check
+                tokio::time::sleep(Duration::from_secs(20)).await;
+                loop {
+                    let cfg = updater_loop.get_config().await;
+                    if cfg.auto_update_enabled && !cfg.safe_mode {
+                        let _ = updater_loop.check_for_updates(&app_handle_for_updater).await;
+                    }
+                    // 6 hours +- 15 minutes jitter
+                    let jitter_secs = 21600 + (protocol::generate_random_bytes(1)[0] as u64 % 1800) - 900;
+                    tokio::time::sleep(Duration::from_secs(jitter_secs)).await;
+                }
+            });
 
             // Forward hub events into rules engine
             let mut event_sub = hub.event_tx.subscribe();
@@ -123,6 +160,8 @@ pub fn run() {
                 rules: rules.clone(),
                 media: media.clone(),
                 app_registry: app_registry.clone(),
+                updater: updater.clone(),
+                hub: hub.clone(),
             };
 
             // Start LAN-only WSS server (axum + rustls)
@@ -134,6 +173,7 @@ pub fn run() {
                 rules,
                 media,
                 app_registry,
+                updater: updater.clone(),
                 agent_id: agent_id.clone(),
             };
             let tls_acceptor = TlsAcceptor::from(tls_mgr.server_config.clone());
@@ -185,7 +225,12 @@ pub fn run() {
             commands::get_running_processes,
             commands::test_title_parser,
             commands::execute_app_action,
-            commands::get_app_runtime_states
+            commands::get_app_runtime_states,
+            commands::get_updater_status,
+            commands::check_for_updates,
+            commands::apply_staged_update,
+            commands::set_updater_config,
+            commands::mark_changelog_viewed
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

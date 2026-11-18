@@ -273,3 +273,47 @@ pub async fn get_app_runtime_states(
 ) -> Result<HashMap<String, crate::app_registry::AppRuntimeState>, String> {
     Ok(state.app_registry.get_runtime_states().await)
 }
+
+#[tauri::command]
+pub async fn get_updater_status(
+    state: State<'_, AgentAppState>,
+) -> Result<crate::updater::UpdaterStatusResponse, String> {
+    Ok(state.updater.get_status().await)
+}
+
+#[tauri::command]
+pub async fn check_for_updates(
+    app: tauri::AppHandle,
+    state: State<'_, AgentAppState>,
+) -> Result<Option<String>, String> {
+    state.updater.check_for_updates(&app).await
+}
+
+#[tauri::command]
+pub async fn apply_staged_update(
+    app: tauri::AppHandle,
+    state: State<'_, AgentAppState>,
+) -> Result<(), String> {
+    state
+        .updater
+        .apply_update_with_notification(&app, &state.hub)
+        .await
+}
+
+#[tauri::command]
+pub async fn set_updater_config(
+    state: State<'_, AgentAppState>,
+    config: crate::updater::AgentUpdaterConfig,
+) -> Result<(), String> {
+    state.updater.save_config(config).await
+}
+
+#[tauri::command]
+pub async fn mark_changelog_viewed(
+    state: State<'_, AgentAppState>,
+    version: String,
+) -> Result<(), String> {
+    let mut cfg = state.updater.get_config().await;
+    cfg.changelog_viewed = Some(version);
+    state.updater.save_config(cfg).await
+}

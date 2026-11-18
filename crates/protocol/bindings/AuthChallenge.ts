@@ -3,4 +3,4 @@
 /**
  * Challenge issued by agent to client on subsequent connections.
  */
-export type AuthChallenge = { nonce: string, };
+export type AuthChallenge = { nonce: string, protocol_version: number, min_compatible_version: number, agent_version: string, };

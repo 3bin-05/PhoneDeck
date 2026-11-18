@@ -11,7 +11,10 @@ import {
   Check,
   Gauge,
   Volume2,
+  ShieldAlert,
+  Download,
 } from 'lucide-react';
+import { useUpdaterStore } from './updaterStore';
 import {
   useDeckStore,
   useActivePage,
@@ -65,6 +68,14 @@ interface ConnectionStatus {
 export default function App() {
   // Activate deck bridge (handles WebSocket, rAF batch flushing, keyboard/volume navigation)
   useDeckBridge();
+
+  const isPcUpdating = useUpdaterStore((s) => s.isPcUpdating);
+  const pcUpdatingEtaSec = useUpdaterStore((s) => s.pcUpdatingEtaSec);
+  const updaterStatus = useUpdaterStore((s) => s.status);
+
+  useEffect(() => {
+    return useUpdaterStore.getState().initUpdater();
+  }, []);
 
   const activePage = useActivePage();
   const totalPages = useDeckStore((s) => s.totalPages);
@@ -903,6 +914,88 @@ export default function App() {
           onClose={() => useDeckStore.getState().removeEvent(approvalEvent.id)}
         />
       )}
+
+      {/* PC APP UPDATING CALM OVERLAY (Void Theme) */}
+      {isPcUpdating && (
+        <div className="fixed inset-0 z-50 bg-[#000000] flex flex-col items-center justify-center p-6 text-center select-none font-mono">
+          <div className="w-3 h-3 rounded-full bg-[#7C5CFF] animate-pulse mb-6 shadow-[0_0_24px_#7C5CFF]" />
+          <div className="text-xl font-light tracking-[0.2em] text-[#EDEDF2] uppercase mb-2">
+            PC App Updating
+          </div>
+          <p className="text-xs text-[#71717A] max-w-xs leading-relaxed">
+            The desktop agent is restarting with a verified update.{'\n'}
+            Reconnecting automatically in ~{pcUpdatingEtaSec}s...
+          </p>
+        </div>
+      )}
+
+      {/* PROTOCOL INCOMPATIBILITY BLOCKING OVERLAY */}
+      {updaterStatus.protocol_incompatible && (
+        <div className="fixed inset-0 z-50 bg-[#000000] flex flex-col items-center justify-center p-6 text-center select-none font-mono">
+          <div className="w-12 h-12 rounded-2xl bg-[#FF3B5C]/10 border border-[#FF3B5C]/30 flex items-center justify-center text-[#FF3B5C] mb-4">
+            <ShieldAlert className="w-6 h-6" />
+          </div>
+          <div className="text-base font-semibold text-[#EDEDF2] mb-2 tracking-wide uppercase">
+            Protocol Update Required
+          </div>
+          <p className="text-xs text-[#71717A] max-w-sm mb-6 leading-relaxed">
+            The connected PC agent is using a newer protocol version than this Display application supports.
+            Update Phone Deck Display to restore telemetry and controls.
+          </p>
+          <button
+            onClick={() => {
+              if (updaterStatus.state === 'ready_to_install') {
+                useUpdaterStore.getState().installStagedUpdate();
+              } else if (updaterStatus.state === 'available') {
+                useUpdaterStore.getState().downloadUpdate();
+              } else {
+                useUpdaterStore.getState().checkForUpdates();
+              }
+            }}
+            className="px-5 py-2.5 rounded-xl bg-[#7C5CFF] text-white text-xs font-medium hover:bg-[#6847ED] transition-all cursor-pointer shadow-lg shadow-[#7C5CFF]/25 flex items-center space-x-2"
+          >
+            <Download className="w-4 h-4" />
+            <span>
+              {updaterStatus.state === 'ready_to_install'
+                ? 'Restart & Install Staged Update'
+                : updaterStatus.state === 'downloading'
+                ? `Downloading (${Math.round(updaterStatus.progress_pct)}%)...`
+                : 'Download Latest Display APK'}
+            </span>
+          </button>
+        </div>
+      )}
+
+      {/* UNOBTRUSIVE UPDATE READY TO INSTALL CARD */}
+      {!updaterStatus.protocol_incompatible &&
+        !isPcUpdating &&
+        (updaterStatus.state === 'ready_to_install' || updaterStatus.pending_user_action) && (
+          <div className="fixed bottom-4 left-4 right-4 z-40 max-w-md mx-auto p-3.5 rounded-xl bg-[#09090D]/95 border border-[#7C5CFF]/30 backdrop-blur-md shadow-2xl flex items-center justify-between font-mono text-xs">
+            <div className="flex items-center space-x-2.5">
+              <div className="w-2 h-2 rounded-full bg-[#00E599] animate-ping" />
+              <div>
+                <div className="text-[#EDEDF2] font-medium">Update Ready</div>
+                <div className="text-[10px] text-[#71717A]">
+                  v{updaterStatus.manifest?.version_name || 'latest'} staged · tap to restart
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => {
+                  if (updaterStatus.pending_user_action) {
+                    useUpdaterStore.getState().launchPendingAction();
+                  } else {
+                    useUpdaterStore.getState().installStagedUpdate();
+                  }
+                }}
+                className="px-3 py-1.5 rounded-lg bg-[#7C5CFF] text-white text-[11px] font-medium hover:bg-[#6847ED] transition-all cursor-pointer shadow-md shadow-[#7C5CFF]/20"
+              >
+                Restart &amp; Install
+              </button>
+            </div>
+          </div>
+        )}
     </div>
   );
 }

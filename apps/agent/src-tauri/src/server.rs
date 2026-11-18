@@ -32,6 +32,7 @@ pub struct ServerState {
     pub rules: Arc<crate::rules::RulesEngine>,
     pub media: Arc<crate::media_session::MediaSessionManager>,
     pub app_registry: Arc<crate::app_registry::AppRegistryManager>,
+    pub updater: Arc<crate::updater::AgentUpdaterManager>,
     pub agent_id: String,
 }
 
@@ -99,6 +100,43 @@ pub async fn start_wss_server(
                     initial
                 );
                 ([(axum::http::header::CONTENT_TYPE, "image/svg+xml")], svg).into_response()
+            }),
+        )
+        // LAN Android update manifest endpoint (phone gets updates over LAN even with no internet)
+        .route(
+            "/api/update/android-latest.json",
+            get(|State(s): State<ServerState>| async move {
+                if let Some(json) = s.updater.get_android_manifest() {
+                    ([(axum::http::header::CONTENT_TYPE, "application/json")], json).into_response()
+                } else {
+                    StatusCode::NOT_FOUND.into_response()
+                }
+            }),
+        )
+        // LAN Android APK chunked/resumable download endpoint
+        .route(
+            "/api/update/apk/{filename}",
+            get(|axum::extract::Path(filename): axum::extract::Path<String>, headers: HeaderMap, State(s): State<ServerState>| async move {
+                let range_hdr = headers.get("range").and_then(|h| h.to_str().ok());
+                if let Some((bytes, start, end, total, sha256)) = s.updater.get_apk_bytes_range(&filename, range_hdr) {
+                    let mut resp_headers = HeaderMap::new();
+                    resp_headers.insert(axum::http::header::CONTENT_TYPE, "application/vnd.android.package-archive".parse().unwrap());
+                    resp_headers.insert(axum::http::header::ACCEPT_RANGES, "bytes".parse().unwrap());
+                    resp_headers.insert(
+                        axum::http::header::CONTENT_RANGE,
+                        format!("bytes {}-{}/{}", start, end, total).parse().unwrap(),
+                    );
+                    resp_headers.insert("X-Checksum-Sha256", sha256.parse().unwrap());
+
+                    let status = if range_hdr.is_some() {
+                        StatusCode::PARTIAL_CONTENT
+                    } else {
+                        StatusCode::OK
+                    };
+                    (status, resp_headers, bytes).into_response()
+                } else {
+                    StatusCode::NOT_FOUND.into_response()
+                }
             }),
         )
         .with_state(state)
@@ -217,6 +255,9 @@ async fn handle_auth_and_stream_socket(mut socket: WebSocket, state: ServerState
 
     let challenge = AuthChallenge {
         nonce: nonce_hex.clone(),
+        protocol_version: protocol::PROTOCOL_VERSION,
+        min_compatible_version: protocol::MIN_COMPATIBLE_VERSION,
+        agent_version: env!("CARGO_PKG_VERSION").to_string(),
     };
 
     let challenge_json = serde_json::to_string(&challenge).unwrap();
@@ -232,7 +273,7 @@ async fn handle_auth_and_stream_socket(mut socket: WebSocket, state: ServerState
         _ => None,
     };
 
-    let authenticated = if let Some(resp) = auth_resp {
+    let authenticated = if let Some(ref resp) = auth_resp {
         if let Ok(proof_bytes) = hex::decode(&resp.proof) {
             if proof_bytes.len() == 32 {
                 let mut proof = [0u8; 32];
@@ -248,21 +289,56 @@ async fn handle_auth_and_stream_socket(mut socket: WebSocket, state: ServerState
         false
     };
 
+    let protocol_compatible = if let Some(ref resp) = auth_resp {
+        if resp.client_protocol_version > 0 {
+            protocol::is_protocol_compatible(
+                protocol::PROTOCOL_VERSION,
+                protocol::MIN_COMPATIBLE_VERSION,
+                resp.client_protocol_version,
+                resp.client_protocol_version,
+            )
+        } else {
+            true
+        }
+    } else {
+        true
+    };
+
     if !authenticated {
         log::warn!("[WSS/Auth] Authentication failed or device revoked. Terminating connection.");
         let result = AuthResult {
             success: false,
             error: Some("Authentication challenge-response failed or device revoked".to_string()),
+            protocol_compatible,
+            agent_protocol_version: protocol::PROTOCOL_VERSION,
+            min_compatible_version: protocol::MIN_COMPATIBLE_VERSION,
         };
         let _ = socket.send(Message::Text(serde_json::to_string(&result).unwrap().into())).await;
         let _ = socket.close().await;
         return;
     }
 
-    log::info!("[WSS/Auth] Device authenticated successfully!");
+    if !protocol_compatible {
+        log::warn!("[WSS/Auth] Client protocol incompatible. Update required.");
+        let result = AuthResult {
+            success: false,
+            error: Some("Protocol version incompatible. An update is required.".to_string()),
+            protocol_compatible: false,
+            agent_protocol_version: protocol::PROTOCOL_VERSION,
+            min_compatible_version: protocol::MIN_COMPATIBLE_VERSION,
+        };
+        let _ = socket.send(Message::Text(serde_json::to_string(&result).unwrap().into())).await;
+        let _ = socket.close().await;
+        return;
+    }
+
+    log::info!("[WSS/Auth] Device authenticated successfully (protocol v{})!", protocol::PROTOCOL_VERSION);
     let result = AuthResult {
         success: true,
         error: None,
+        protocol_compatible: true,
+        agent_protocol_version: protocol::PROTOCOL_VERSION,
+        min_compatible_version: protocol::MIN_COMPATIBLE_VERSION,
     };
     if socket.send(Message::Text(serde_json::to_string(&result).unwrap().into())).await.is_err() {
         return;

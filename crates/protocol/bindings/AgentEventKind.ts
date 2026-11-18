@@ -3,4 +3,4 @@
 /**
  * Agent event types per plan.md section 6.2.
  */
-export type AgentEventKind = "done" | "needs_input" | "approval" | "error" | "working" | "idle";
+export type AgentEventKind = "done" | "needs_input" | "approval" | "error" | "working" | "idle" | "agent_updating" | "update_available" | "update_required";

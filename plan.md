@@ -639,3 +639,59 @@ The integer field dictionary in `crates/protocol/src/fields.rs` is extended with
 - [x] Protected process denylist and hold-to-confirm safeguards prevent accidental process termination.
 - [x] App Dock widget dynamically positions active applications first with real-time resource meters.
 
+---
+
+## 18. Phone Deck v2.2 Specification (Cryptographic In-App Auto-Updating System)
+
+This section documents the v2.2 auto-updating architecture, release manifests, protocol extensions, LAN serving pipeline, Android package installer session integration, and crash recovery safeguards implemented across the Agent and Display applications.
+
+### 18.1 System Overview & Ground Rules
+- **Auto-Update Enabled by Default**: Auto-update is active by default in both Windows Agent and Android Display. Infrequent, non-intrusive background checks run every 6 hours with random jitter (± 15 minutes) and on app start.
+- **Strict Network Boundary**: All networking, signature verification, and HTTP Range streaming live exclusively in the Rust core. The WebView UI never touches sockets, raw certs, or download endpoints directly.
+- **Native Android Engine**: All native Android package operations are consolidated in the unified Kotlin plugin (`packages/deck-android`), utilizing Android's `PackageInstaller` session API with `USER_ACTION_NOT_REQUIRED` on Android 12+ (API 31+).
+- **Zero Secrets in Logs**: No private keys, signatures, or device tokens are logged. Updaters are disabled by default in debug builds unless explicitly triggered via dev settings.
+- **Budget Compliance**: Manifest checks use HTTP `ETag` / `If-None-Match` (304 Not Modified sends 0 bytes). Downloads pause or avoid running during Night Clock / ambient mode unless the install step is scheduled.
+
+### 18.2 Release Artifacts & Cryptographic Verification
+1. **Windows Desktop Updater (Agent)**:
+   - Configured via `tauri-plugin-updater` v2 with `"windows.installMode": "passive"` for quiet, non-blocking UAC installations.
+   - Artifacts (`.nsis.zip`) are signed with the Tauri Minisign/Ed25519 key (`TAURI_SIGNING_PRIVATE_KEY`). The public key is embedded in `apps/agent/src-tauri/tauri.conf.json`.
+   - Release manifest `latest.json` is published on GitHub Releases.
+2. **Android Display In-App Updater**:
+   - Release manifest `android-latest.json` holds metadata: `version_name`, `version_code`, `min_protocol`, `protocol`, `released_at`, `changelog`, `signing_cert_sha256`, and per-ABI APK artifacts (`arm64-v8a`, `armeabi-v7a`, `universal`).
+   - The entire manifest payload is signed with an independent Ed25519 key (`MANIFEST_ED25519_PRIVATE_KEY`). The public key is embedded in `crates/protocol` (`EMBEDDED_ED25519_PUBLIC_KEY`). The Display Rust core validates this signature before reading any field.
+   - Downgrade Protection: Rejects any release where candidate `version_code <= installed_version_code`.
+   - Protocol Compatibility: Validates `local_proto >= remote_min && remote_proto >= local_min`. Flags `protocol_incompatible` state if breaking mismatch occurs.
+   - APK Signature Verification: Before handing the downloaded APK to Android's `PackageInstaller`, the Kotlin plugin verifies that the APK's signing certificate matches both `manifest.signing_cert_sha256` and the currently installed application's certificate via `PackageManager.GET_SIGNING_CERTIFICATES`.
+
+### 18.3 PC <-> Phone LAN Serving Pipeline
+- **Local Network Speed & Privacy**: When paired, the Agent hosts:
+  - `GET /api/update/android-latest.json`: The signed Android release manifest.
+  - `GET /api/update/apk/:filename`: Resumable APK chunk server supporting `Range: bytes=start-end` headers with `206 Partial Content` and streaming SHA-256 verification.
+- **Source Priority**:
+  1. Paired PC over LAN (fastest, private, zero external bandwidth).
+  2. Internet manifest from GitHub Releases (fallback if PC is offline or un-updated).
+
+### 18.4 Installation Scheduling & Pre-Restart Handshake
+- **Pre-Restart Handshake**: When the Agent stages an update and prepares to restart, it first broadcasts an `AgentEventKind::AgentUpdating { eta_seconds: 30 }` event over the WebSocket, then waits for 1.5 seconds to ensure the MessagePack packet flushes through TLS to the phone. The Display client transitions to a calm, typographic "PC App Updating" state with countdown instead of showing a disconnect error.
+- **Display Idle Scheduling**:
+  - In Night Clock / dark mode: The APK is staged silently and installed automatically at the next dark-to-bright exit (or at 04:00 if it stays dark).
+  - In Active mode: Shows an unobtrusive "Update ready — tap to restart" banner. If ignored, schedules install on next screen-off.
+
+### 18.5 Crash Recovery & Safe Mode
+- **Startup Crash Tracker**: The Agent tracks startup crash counts across restarts. If the application crashes within 60 seconds of launch 3 times consecutively, safe mode is engaged:
+  - Automatic updates are paused.
+  - A prominent notification is surfaced in Settings > Updates.
+  - The previous cached installer version is retained locally to offer instant one-click rollback.
+
+### 18.6 Verification & Acceptance Checklist
+- [x] Version synchronization script (`scripts/sync-versions.mjs`) synchronizes versions between Cargo workspace, package.json files, and derives Android `versionCode = major * 10000 + minor * 100 + patch`.
+- [x] Key management guide (`docs/RELEASING.md`) documents Tauri updater key, Android release keystore, and Ed25519 manifest key generation and offline backup requirements.
+- [x] Ed25519 manifest signing and signature verification tested with deterministic keypair.
+- [x] Downgrade prevention strictly blocks candidate versionCode <= installed versionCode.
+- [x] Resumable Range HTTP download with streaming SHA-256 calculation verifies file integrity and deletes corrupted partial downloads.
+- [x] Android PackageInstaller session API integrated into Kotlin plugin with unknown sources permission check and `USER_ACTION_NOT_REQUIRED` support.
+- [x] Offline mock release server (`crates/deck-mock`) serves `latest.json`, `android-latest.json`, and Range-enabled `/api/update/apk/{filename}` fixtures.
+- [x] Full integration test (`apps/agent/src-tauri/tests/updater_integration_test.rs`) validates normal updates, downgrade prevention, protocol compatibility, ABI fallback, and idle installation scheduler.
+
+

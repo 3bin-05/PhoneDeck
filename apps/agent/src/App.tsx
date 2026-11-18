@@ -4,6 +4,7 @@ import { ShortcutsManager } from './editor/ShortcutsManager';
 import { RulesManager } from './editor/RulesManager';
 import { AmbientSettings } from './editor/AmbientSettings';
 import { AppsManager } from './editor/AppsManager';
+import { UpdatesManager } from './editor/UpdatesManager';
 import {
   QrCode,
   Monitor,
@@ -452,20 +453,24 @@ export default function App() {
         {activeTab === 'ambient' && <AmbientSettings />}
 
         {activeTab === 'settings' && (
-          <div className="max-w-4xl mx-auto p-8 rounded-2xl bg-[#08080C] border border-white/[0.08] space-y-4">
-            <h3 className="text-sm font-semibold">Agent Preferences</h3>
-            <div className="text-xs text-[#71717A] space-y-2">
-              <div className="flex items-center justify-between py-2 border-b border-white/[0.06]">
-                <span>Autostart on Windows Login</span>
-                <span className="text-[#00E599] font-mono">Enabled</span>
-              </div>
-              <div className="flex items-center justify-between py-2 border-b border-white/[0.06]">
-                <span>mDNS Service Advertisement</span>
-                <span className="text-[#00E599] font-mono">_phonedeck._tcp.local</span>
-              </div>
-              <div className="flex items-center justify-between py-2 border-b border-white/[0.06]">
-                <span>Self-Signed Pinned TLS Server</span>
-                <span className="text-[#00E599] font-mono">Port 8766 (Active)</span>
+          <div className="max-w-4xl mx-auto space-y-6">
+            <UpdatesManager />
+
+            <div className="p-6 rounded-2xl bg-[#08080C] border border-white/[0.08] space-y-4">
+              <h3 className="text-sm font-semibold">Agent Preferences</h3>
+              <div className="text-xs text-[#71717A] space-y-2">
+                <div className="flex items-center justify-between py-2 border-b border-white/[0.06]">
+                  <span>Autostart on Windows Login</span>
+                  <span className="text-[#00E599] font-mono">Enabled</span>
+                </div>
+                <div className="flex items-center justify-between py-2 border-b border-white/[0.06]">
+                  <span>mDNS Service Advertisement</span>
+                  <span className="text-[#00E599] font-mono">_phonedeck._tcp.local</span>
+                </div>
+                <div className="flex items-center justify-between py-2 border-b border-white/[0.06]">
+                  <span>Self-Signed Pinned TLS Server</span>
+                  <span className="text-[#00E599] font-mono">Port 8766 (Active)</span>
+                </div>
               </div>
             </div>
           </div>

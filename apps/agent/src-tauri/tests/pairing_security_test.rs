@@ -136,6 +136,10 @@ async fn test_pairing_tls_challenge_response_and_revocation() {
         rules: Arc::new(agent_lib::rules::RulesEngine::new()),
         media,
         app_registry,
+        updater: Arc::new(agent_lib::updater::AgentUpdaterManager::new(
+            &temp_dir,
+            "0.1.0",
+        )),
         agent_id: agent_id.clone(),
     };
     let tls_acceptor = TlsAcceptor::from(tls_mgr.server_config.clone());
@@ -222,10 +226,7 @@ async fn test_pairing_tls_challenge_response_and_revocation() {
     let client_key = derive_client_key(&device_key_bytes);
     let proof = create_auth_proof(&client_key, &nonce_bytes);
 
-    let auth_resp = AuthResponse {
-        device_id: "phone-test-1".to_string(),
-        proof: hex::encode(proof),
-    };
+    let auth_resp = AuthResponse::new("phone-test-1".to_string(), hex::encode(proof));
     ws_stream3
         .send(Message::Text(serde_json::to_string(&auth_resp).unwrap().into()))
         .await
@@ -255,10 +256,7 @@ async fn test_pairing_tls_challenge_response_and_revocation() {
     let nonce_bytes4 = hex::decode(&challenge4.nonce).unwrap();
     let proof4 = create_auth_proof(&client_key, &nonce_bytes4);
 
-    let auth_resp4 = AuthResponse {
-        device_id: "phone-test-1".to_string(),
-        proof: hex::encode(proof4),
-    };
+    let auth_resp4 = AuthResponse::new("phone-test-1".to_string(), hex::encode(proof4));
     ws_stream4
         .send(Message::Text(serde_json::to_string(&auth_resp4).unwrap().into()))
         .await

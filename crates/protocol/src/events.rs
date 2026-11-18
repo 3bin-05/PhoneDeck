@@ -22,6 +22,9 @@ pub enum AgentEventKind {
     Error,
     Working,
     Idle,
+    AgentUpdating,
+    UpdateAvailable,
+    UpdateRequired,
 }
 
 /// AgentEvent payload sent over the reliable, ordered events channel.

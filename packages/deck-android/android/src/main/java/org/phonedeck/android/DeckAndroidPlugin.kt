@@ -1,8 +1,12 @@
 package org.phonedeck.android
 
 import android.app.Activity
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageInfo
+import android.content.pm.PackageInstaller
+import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -24,6 +28,8 @@ import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
 import app.tauri.plugin.Invoke
 import java.io.File
+import java.io.FileInputStream
+import java.security.MessageDigest
 
 @InvokeArg
 class ScreenArgs {
@@ -38,6 +44,19 @@ class VibrateArgs {
 @InvokeArg
 class InstallApkArgs {
     var path: String = ""
+}
+
+@InvokeArg
+class VerifyApkArgs {
+    var path: String = ""
+    var expectedCertSha256: String = ""
+    var minVersionCode: Long = 0
+}
+
+@InvokeArg
+class InstallSessionArgs {
+    var path: String = ""
+    var allowSilent: Boolean = true
 }
 
 @InvokeArg
@@ -349,7 +368,260 @@ class DeckAndroidPlugin(private val activity: Activity) : Plugin(activity) {
         }
     }
 
+    @Command
+    fun canRequestPackageInstalls(invoke: Invoke) {
+        val allowed = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            activity.packageManager.canRequestPackageInstalls()
+        } else {
+            true
+        }
+        val ret = JSObject()
+        ret.put("allowed", allowed)
+        invoke.resolve(ret)
+    }
+
+    @Command
+    fun openInstallPermissionSettings(invoke: Invoke) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                    data = Uri.parse("package:${activity.packageName}")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                activity.startActivity(intent)
+            }
+            invoke.resolve()
+        } catch (e: Exception) {
+            invoke.reject("Failed to open install permissions: ${e.message}")
+        }
+    }
+
+    @Command
+    fun verifyApk(invoke: Invoke) {
+        val args = invoke.parseArgs(VerifyApkArgs::class.java)
+        try {
+            val file = File(args.path)
+            if (!file.exists() || !file.canRead()) {
+                invoke.reject("APK file does not exist or is unreadable at ${args.path}")
+                return
+            }
+
+            val pm = activity.packageManager
+            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                PackageManager.GET_SIGNING_CERTIFICATES
+            } else {
+                @Suppress("DEPRECATION")
+                PackageManager.GET_SIGNATURES
+            }
+
+            val pkgInfo = pm.getPackageArchiveInfo(args.path, flags)
+            if (pkgInfo == null) {
+                invoke.reject("Failed to parse APK archive: corrupted or invalid package format")
+                return
+            }
+
+            // 1. Verify package name matches installed application
+            if (pkgInfo.packageName != activity.packageName) {
+                invoke.reject("Package name mismatch: candidate '${pkgInfo.packageName}' does not match installed '${activity.packageName}'")
+                return
+            }
+
+            // 2. Verify versionCode is higher than installed (downgrade prevention)
+            val candidateVersionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                pkgInfo.longVersionCode
+            } else {
+                @Suppress("DEPRECATION")
+                pkgInfo.versionCode.toLong()
+            }
+
+            if (candidateVersionCode <= args.minVersionCode) {
+                invoke.reject("Downgrade rejected: candidate versionCode $candidateVersionCode is not higher than installed ${args.minVersionCode}")
+                return
+            }
+
+            // 3. Verify signing certificate SHA-256 against installed certificate & manifest expected cert
+            val candidateCertSha256 = getApkCertSha256(pkgInfo)
+            if (candidateCertSha256 == null) {
+                invoke.reject("Failed to read signing certificate from APK archive")
+                return
+            }
+
+            val installedCertSha256 = getInstalledSigningCertSha256(activity)
+            if (installedCertSha256 != null && !candidateCertSha256.equals(installedCertSha256, ignoreCase = true)) {
+                invoke.reject("Security violation: APK signing certificate SHA-256 does not match installed application certificate")
+                return
+            }
+
+            if (args.expectedCertSha256.isNotBlank() && !candidateCertSha256.equals(args.expectedCertSha256, ignoreCase = true)) {
+                invoke.reject("Security violation: APK signing certificate SHA-256 does not match release manifest certificate")
+                return
+            }
+
+            val ret = JSObject()
+            ret.put("valid", true)
+            ret.put("packageName", pkgInfo.packageName)
+            ret.put("versionCode", candidateVersionCode)
+            ret.put("versionName", pkgInfo.versionName ?: "")
+            ret.put("certSha256", candidateCertSha256)
+            invoke.resolve(ret)
+        } catch (e: Exception) {
+            invoke.reject("APK verification failed: ${e.message}")
+        }
+    }
+
+    @Command
+    fun installApkSession(invoke: Invoke) {
+        val args = invoke.parseArgs(InstallSessionArgs::class.java)
+        try {
+            val file = File(args.path)
+            if (!file.exists()) {
+                invoke.reject("APK file does not exist at ${args.path}")
+                return
+            }
+
+            val packageInstaller = activity.packageManager.packageInstaller
+            val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
+                setAppPackageName(activity.packageName)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && args.allowSilent) {
+                    setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+                }
+            }
+
+            val sessionId = packageInstaller.createSession(params)
+            val session = packageInstaller.openSession(sessionId)
+
+            session.openWrite("phone_deck_update", 0, file.length()).use { outStream ->
+                FileInputStream(file).use { inStream ->
+                    inStream.copyTo(outStream)
+                    session.fsync(outStream)
+                }
+            }
+
+            val callbackIntent = Intent(activity, InstallResultReceiver::class.java)
+            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+            } else {
+                PendingIntent.FLAG_UPDATE_CURRENT
+            }
+            val pendingIntent = PendingIntent.getBroadcast(activity, sessionId, callbackIntent, flags)
+
+            session.commit(pendingIntent.intentSender)
+            session.close()
+
+            val ret = JSObject()
+            ret.put("sessionId", sessionId)
+            invoke.resolve(ret)
+        } catch (e: Exception) {
+            invoke.reject("PackageInstaller session failed: ${e.message}")
+        }
+    }
+
+    @Command
+    fun launchPendingUserAction(invoke: Invoke) {
+        try {
+            val intent = pendingConfirmIntent
+            if (intent != null) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                activity.startActivity(intent)
+                pendingConfirmIntent = null
+                invoke.resolve()
+            } else {
+                invoke.reject("No pending user confirmation intent available")
+            }
+        } catch (e: Exception) {
+            invoke.reject("Failed to launch confirmation intent: ${e.message}")
+        }
+    }
+
+    companion object {
+        @Volatile
+        var instance: DeckAndroidPlugin? = null
+        @Volatile
+        var pendingConfirmIntent: Intent? = null
+
+        fun onInstallResult(context: Context, status: Int, message: String?, confirmIntent: Intent?) {
+            val inst = instance ?: return
+            val ret = JSObject()
+            ret.put("status", status)
+            ret.put("message", message ?: "")
+
+            when (status) {
+                PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                    pendingConfirmIntent = confirmIntent
+                    ret.put("state", "pending_user_action")
+                    inst.trigger("installStatus", ret)
+                }
+                PackageInstaller.STATUS_SUCCESS -> {
+                    pendingConfirmIntent = null
+                    ret.put("state", "success")
+                    inst.trigger("installStatus", ret)
+                }
+                else -> {
+                    pendingConfirmIntent = null
+                    ret.put("state", "failure")
+                    val friendlyMsg = when (status) {
+                        PackageInstaller.STATUS_FAILURE_ABORTED -> "Installation aborted by system or user."
+                        PackageInstaller.STATUS_FAILURE_BLOCKED -> "Installation blocked by device policy."
+                        PackageInstaller.STATUS_FAILURE_CONFLICT -> "Package conflict with an existing installation."
+                        PackageInstaller.STATUS_FAILURE_INCOMPATIBLE -> "Package incompatible with this device ABI or OS."
+                        PackageInstaller.STATUS_FAILURE_STORAGE -> "Insufficient storage space for installation."
+                        else -> message ?: "Installation failed with status code $status"
+                    }
+                    ret.put("message", friendlyMsg)
+                    inst.trigger("installStatus", ret)
+                }
+            }
+        }
+
+        fun sha256Hex(bytes: ByteArray): String {
+            val md = MessageDigest.getInstance("SHA-256")
+            val digest = md.digest(bytes)
+            return digest.joinToString("") { "%02x".format(it) }
+        }
+
+        fun getInstalledSigningCertSha256(context: Context): String? {
+            return try {
+                val pm = context.packageManager
+                val pkg = context.packageName
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    val info = pm.getPackageInfo(pkg, PackageManager.GET_SIGNING_CERTIFICATES)
+                    val certs = info.signingInfo?.apkContentsSigners
+                    certs?.firstOrNull()?.let { sha256Hex(it.toByteArray()) }
+                } else {
+                    @Suppress("DEPRECATION")
+                    val info = pm.getPackageInfo(pkg, PackageManager.GET_SIGNATURES)
+                    @Suppress("DEPRECATION")
+                    info.signatures?.firstOrNull()?.let { sha256Hex(it.toByteArray()) }
+                }
+            } catch (_: Exception) {
+                null
+            }
+        }
+
+        fun getApkCertSha256(pkgInfo: PackageInfo): String? {
+            return try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    val certs = pkgInfo.signingInfo?.apkContentsSigners
+                    certs?.firstOrNull()?.let { sha256Hex(it.toByteArray()) }
+                } else {
+                    @Suppress("DEPRECATION")
+                    pkgInfo.signatures?.firstOrNull()?.let { sha256Hex(it.toByteArray()) }
+                }
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
+
+    override fun load(webView: android.webkit.WebView) {
+        super.load(webView)
+        instance = this
+    }
+
     override fun onDestroy() {
+        if (instance === this) {
+            instance = null
+        }
         stopLightSensorInternal()
         // Restore screen brightness
         activity.runOnUiThread {

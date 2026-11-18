@@ -3,4 +3,4 @@
 /**
  * Authentication result returned to client.
  */
-export type AuthResult = { success: boolean, error: string | null, };
+export type AuthResult = { success: boolean, error: string | null, protocol_compatible: boolean, agent_protocol_version: number, min_compatible_version: number, };

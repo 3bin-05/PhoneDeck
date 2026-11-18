@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { decodeMsgPack, type AgentEvent } from '@phone-deck/ui-kit';
 import { useDeckStore } from './deckStore';
 import { useAmbientStore, registerAmbientSocketSender } from './ambientStore';
+import { useUpdaterStore } from './updaterStore';
 
 let globalSocketSender: ((msg: string) => void) | null = null;
 
@@ -162,6 +163,7 @@ export function useDeckBridge(wsUrl: string = 'ws://127.0.0.1:8765/ws') {
         ws.onopen = () => {
           if (!active) return;
           useDeckStore.getState().setConnected(true);
+          useUpdaterStore.getState().setPcUpdating(false);
 
           // Announce initial display state (ambient profile subscription)
           const ambientState = useAmbientStore.getState().state;
@@ -235,6 +237,13 @@ export function useDeckBridge(wsUrl: string = 'ws://127.0.0.1:8765/ws') {
             if (channel === 2 && payload) {
               const agentEvt = payload as AgentEvent;
               useDeckStore.getState().addEvent(agentEvt);
+
+              // Check if Agent sent agent.updating notification
+              const kind = agentEvt.kind as any;
+              if (kind === 'agent_updating' || (typeof kind === 'object' && kind?.agent_updating)) {
+                const eta = kind?.agent_updating?.eta_seconds || 30;
+                useUpdaterStore.getState().setPcUpdating(true, eta);
+              }
 
               // Notify Ambient Night Clock mode of incoming agent event
               useAmbientStore.getState().triggerEventAlert(agentEvt.kind);

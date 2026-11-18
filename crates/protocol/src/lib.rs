@@ -10,9 +10,15 @@ pub mod envelope;
 pub mod events;
 pub mod fields;
 pub mod lttb;
+pub mod updater;
 
 pub use ambient::*;
 pub use lttb::{lttb_downsample, DataPoint};
+pub use updater::{
+    can_install_idle, is_protocol_compatible, is_version_code_upgrade, select_apk_for_abi,
+    semver_to_version_code, sign_manifest, verify_manifest_signature, AndroidReleaseManifest,
+    ApkArtifact, SignedAndroidManifest, EMBEDDED_ED25519_PUBLIC_KEY, MIN_COMPATIBLE_VERSION,
+};
 
 pub use crypto::{
     compute_cert_fingerprint, create_auth_proof, derive_client_key, derive_stored_key,

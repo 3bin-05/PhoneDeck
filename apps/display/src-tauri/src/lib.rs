@@ -1,17 +1,20 @@
 pub mod client;
 pub mod commands;
 pub mod tls_verifier;
+pub mod updater;
 
 use client::{ConnectionStatus, DisplayClientManager};
 use futures_util::StreamExt;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
+use updater::DisplayUpdater;
 
 pub struct DisplayAppState {
     pub device_id: String,
     pub client_mgr: Arc<DisplayClientManager>,
     pub status: Arc<Mutex<ConnectionStatus>>,
+    pub updater: Arc<DisplayUpdater>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -34,6 +37,7 @@ pub fn run() {
 
             let client_mgr = Arc::new(DisplayClientManager::new(&storage_dir));
             let saved_config = client_mgr.load_config();
+            let updater = Arc::new(DisplayUpdater::new(&storage_dir));
 
             let device_id = format!("device-{}", &protocol::generate_nonce()[0..8]);
 
@@ -43,6 +47,7 @@ pub fn run() {
                 agent_id: saved_config.as_ref().map(|c| c.agent_id.clone()),
                 active_host: None,
                 error: None,
+                protocol_incompatible: false,
             };
 
             let status = Arc::new(Mutex::new(initial_status));
@@ -78,23 +83,68 @@ pub fn run() {
                                 }
                             }
                             Err(e) => {
+                                let is_incompatible = e.contains("PROTOCOL_INCOMPATIBLE");
                                 {
                                     let mut s = status_clone.lock().unwrap();
                                     s.connected = false;
                                     s.error = Some(e.clone());
+                                    s.protocol_incompatible = is_incompatible;
                                 }
-                                log::warn!("[Display] Reconnect failed: {}. Retrying in 3s...", e);
-                                tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
+                                if is_incompatible {
+                                    log::error!("[Display] Protocol incompatible with Agent: {}", e);
+                                    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                                } else {
+                                    log::warn!("[Display] Reconnect failed: {}. Retrying in 3s...", e);
+                                    tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
+                                }
                             }
                         }
                     }
                 });
             }
 
+            // Periodic auto-update check loop (every 6 hours with jitter)
+            let updater_loop = updater.clone();
+            let status_loop = status.clone();
+            tauri::async_runtime::spawn(async move {
+                // Initial delay on launch: 10s
+                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                loop {
+                    let should_check = {
+                        let cfg = updater_loop.get_config();
+                        cfg.auto_update
+                    };
+
+                    if should_check {
+                        let (lan_host, lan_port) = {
+                            let s = status_loop.lock().unwrap();
+                            if let Some(ref host_addr) = s.active_host {
+                                let parts: Vec<&str> = host_addr.split(':').collect();
+                                let host = parts.first().copied();
+                                let port = parts.get(1).and_then(|p| p.parse::<u16>().ok());
+                                (host.map(|h| h.to_string()), port)
+                            } else {
+                                (None, None)
+                            }
+                        };
+
+                        log::info!("[DisplayUpdater] Running periodic background update check");
+                        let _ = updater_loop
+                            .check_for_updates(lan_host.as_deref(), lan_port, "arm64-v8a")
+                            .await;
+                    }
+
+                    // Sleep 6 hours ± 15 mins jitter
+                    let jitter_secs = 21600 + (rand_jitter_secs() % 1800);
+                    tokio::time::sleep(std::time::Duration::from_secs(jitter_secs)).await;
+                }
+            });
+
             let app_state = DisplayAppState {
                 device_id,
                 client_mgr,
                 status,
+                updater,
             };
 
             app.manage(app_state);
@@ -105,7 +155,21 @@ pub fn run() {
             commands::pair_with_uri,
             commands::get_connection_status,
             commands::unpair_device,
+            commands::get_display_updater_status,
+            commands::get_display_updater_config,
+            commands::set_display_updater_config,
+            commands::check_display_updates,
+            commands::download_display_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");
+}
+
+fn rand_jitter_secs() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    (now % 1800) as u64
 }

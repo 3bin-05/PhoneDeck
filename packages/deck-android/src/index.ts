@@ -106,6 +106,98 @@ export async function installApk(path: string): Promise<void> {
   }
 }
 
+export interface VerifyApkResult {
+  valid: boolean;
+  packageName: string;
+  versionCode: number;
+  versionName: string;
+  certSha256: string;
+}
+
+export async function verifyApk(
+  path: string,
+  expectedCertSha256: string,
+  minVersionCode: number
+): Promise<VerifyApkResult> {
+  if (isTauri) {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return await invoke<VerifyApkResult>('plugin:deck-android|verifyApk', {
+      path,
+      expectedCertSha256,
+      minVersionCode,
+    });
+  }
+  return {
+    valid: true,
+    packageName: 'com.phonedeck.display',
+    versionCode: minVersionCode + 1,
+    versionName: 'mock.update',
+    certSha256: expectedCertSha256,
+  };
+}
+
+export async function canRequestPackageInstalls(): Promise<boolean> {
+  if (isTauri) {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const res = await invoke<{ allowed: boolean }>('plugin:deck-android|canRequestPackageInstalls');
+      return res.allowed;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
+export async function openInstallPermissionSettings(): Promise<void> {
+  if (isTauri) {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('plugin:deck-android|openInstallPermissionSettings');
+  }
+}
+
+export async function installApkSession(path: string, allowSilent: boolean = true): Promise<number> {
+  if (isTauri) {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const res = await invoke<{ sessionId: number }>('plugin:deck-android|installApkSession', {
+      path,
+      allowSilent,
+    });
+    return res.sessionId;
+  }
+  return 1;
+}
+
+export async function launchPendingUserAction(): Promise<void> {
+  if (isTauri) {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('plugin:deck-android|launchPendingUserAction');
+  }
+}
+
+export interface InstallStatusEvent {
+  state: 'pending_user_action' | 'success' | 'failure';
+  message: string;
+  status: number;
+}
+
+export async function onInstallStatus(
+  callback: (status: InstallStatusEvent) => void
+): Promise<() => void> {
+  if (isTauri) {
+    try {
+      const { listen } = await import('@tauri-apps/api/event');
+      const unlisten = await listen<InstallStatusEvent>('installStatus', (event: { payload: InstallStatusEvent }) => {
+        callback(event.payload);
+      });
+      return unlisten;
+    } catch (e) {
+      console.warn('onInstallStatus listen failed:', e);
+    }
+  }
+  return () => {};
+}
+
 export async function isLightSensorAvailable(): Promise<boolean> {
   if (isTauri) {
     try {

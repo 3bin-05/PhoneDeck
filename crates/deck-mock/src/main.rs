@@ -11,6 +11,10 @@ use protocol::{
     compute_delta, to_msgpack, AgentEvent, AgentEventKind, DeadbandConfig, Envelope, FieldId,
     GitStats, TelemetryState, PROTOCOL_VERSION,
 };
+use protocol::updater::{
+    compute_sha256, sign_manifest, AndroidReleaseManifest, ApkArtifact, SignedAndroidManifest,
+    TEST_MANIFEST_PKCS8,
+};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
@@ -99,6 +103,10 @@ async fn main() {
                 ([(axum::http::header::CONTENT_TYPE, "image/svg+xml")], svg)
             }),
         )
+        // Mock update endpoints for offline testing
+        .route("/api/update/latest.json", get(handle_mock_desktop_latest))
+        .route("/api/update/android-latest.json", get(handle_mock_android_latest))
+        .route("/api/update/apk/{filename}", get(handle_mock_apk_download))
         .with_state(state)
         .layer(CorsLayer::permissive());
 
@@ -401,4 +409,125 @@ async fn run_simulation_generator(tx: AppState) {
             }
         }
     }
+}
+
+async fn handle_mock_desktop_latest() -> axum::response::Json<serde_json::Value> {
+    axum::response::Json(serde_json::json!({
+        "version": "v0.2.0",
+        "notes": "Phone Deck v0.2.0:\n- Ambient night clock with lux hysteresis\n- Resumable in-app updater\n- Now Playing & Process controls",
+        "pub_date": "2026-11-18T12:00:00Z",
+        "platforms": {
+            "windows-x86_64": {
+                "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNpZ25lcg==",
+                "url": "http://127.0.0.1:8765/api/update/apk/agent-v0.2.0-x64-setup.nsis.zip"
+            }
+        }
+    }))
+}
+
+async fn handle_mock_android_latest(
+    headers: axum::http::HeaderMap,
+) -> impl axum::response::IntoResponse {
+    let etag = "\"mock-etag-v0.2.0\"";
+    if let Some(if_none_match) = headers.get(axum::http::header::IF_NONE_MATCH) {
+        if if_none_match.to_str().unwrap_or("") == etag {
+            return (
+                axum::http::StatusCode::NOT_MODIFIED,
+                [(axum::http::header::ETAG, etag.to_string())],
+                axum::response::Json(serde_json::json!(null)),
+            );
+        }
+    }
+
+    let canned_apk_bytes: Vec<u8> = (0..16384).map(|i| (i % 256) as u8).collect();
+    let apk_sha256 = compute_sha256(&canned_apk_bytes);
+
+    let manifest = AndroidReleaseManifest {
+        version_name: "0.2.0".to_string(),
+        version_code: 200,
+        min_protocol: 1,
+        protocol: 1,
+        released_at: "2026-11-18T12:00:00Z".to_string(),
+        changelog: "- Night Clock ambient mode\n- High-performance auto-updating system".to_string(),
+        signing_cert_sha256: "4a72e819b16893630f9d0c64952d73347c64a3e218c575cf2a33f381c6e1db02".to_string(),
+        apks: vec![
+            ApkArtifact {
+                abi: "arm64-v8a".to_string(),
+                url: "http://127.0.0.1:8765/api/update/apk/display-v0.2.0-arm64-v8a.apk".to_string(),
+                size: canned_apk_bytes.len() as u64,
+                sha256: apk_sha256.clone(),
+            },
+            ApkArtifact {
+                abi: "universal".to_string(),
+                url: "http://127.0.0.1:8765/api/update/apk/display-v0.2.0-universal.apk".to_string(),
+                size: canned_apk_bytes.len() as u64,
+                sha256: apk_sha256,
+            },
+        ],
+    };
+
+    let canonical_bytes = serde_json::to_vec(&manifest).unwrap();
+    let signature = sign_manifest(&canonical_bytes, TEST_MANIFEST_PKCS8).unwrap();
+
+    let signed_envelope = SignedAndroidManifest {
+        manifest,
+        signature,
+    };
+
+    (
+        axum::http::StatusCode::OK,
+        [(axum::http::header::ETAG, etag.to_string())],
+        axum::response::Json(serde_json::to_value(&signed_envelope).unwrap()),
+    )
+}
+
+async fn handle_mock_apk_download(
+    axum::extract::Path(filename): axum::extract::Path<String>,
+    headers: axum::http::HeaderMap,
+) -> impl axum::response::IntoResponse {
+    let mut canned_payload: Vec<u8> = (0..16384).map(|i| (i % 256) as u8).collect();
+
+    // Support test corrupt fixture
+    if filename.contains("corrupt") {
+        canned_payload[10] ^= 0xFF; // corrupt one byte
+    }
+
+    let total_len = canned_payload.len();
+
+    if let Some(range_header) = headers.get(axum::http::header::RANGE) {
+        if let Ok(range_str) = range_header.to_str() {
+            if let Some(stripped) = range_str.strip_prefix("bytes=") {
+                let parts: Vec<&str> = stripped.split('-').collect();
+                let start: usize = parts[0].parse().unwrap_or(0);
+                let end: usize = if parts.len() > 1 && !parts[1].is_empty() {
+                    parts[1].parse().unwrap_or(total_len - 1)
+                } else {
+                    total_len - 1
+                };
+
+                let slice = &canned_payload[start..=end.min(total_len - 1)];
+                let content_range = format!("bytes {}-{}/{}", start, end.min(total_len - 1), total_len);
+
+                return (
+                    axum::http::StatusCode::PARTIAL_CONTENT,
+                    [
+                        (axum::http::header::CONTENT_TYPE, "application/vnd.android.package-archive".to_string()),
+                        (axum::http::header::CONTENT_RANGE, content_range),
+                        (axum::http::header::ACCEPT_RANGES, "bytes".to_string()),
+                    ],
+                    slice.to_vec(),
+                );
+            }
+        }
+    }
+
+    (
+        axum::http::StatusCode::OK,
+        [
+            (axum::http::header::CONTENT_TYPE, "application/vnd.android.package-archive".to_string()),
+            (axum::http::header::CONTENT_RANGE, "".to_string()),
+            (axum::http::header::ACCEPT_RANGES, "bytes".to_string()),
+        ],
+        canned_payload,
+    )
 }

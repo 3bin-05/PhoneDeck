@@ -121,11 +121,32 @@ pub struct PairResponse {
     pub error: Option<String>,
 }
 
+fn default_true() -> bool {
+    true
+}
+
 /// Challenge issued by agent to client on subsequent connections.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct AuthChallenge {
     pub nonce: String,
+    #[serde(default)]
+    pub protocol_version: u32,
+    #[serde(default)]
+    pub min_compatible_version: u32,
+    #[serde(default)]
+    pub agent_version: String,
+}
+
+impl AuthChallenge {
+    pub fn new(nonce: String) -> Self {
+        Self {
+            nonce,
+            protocol_version: crate::PROTOCOL_VERSION,
+            min_compatible_version: crate::MIN_COMPATIBLE_VERSION,
+            agent_version: "0.1.0".to_string(),
+        }
+    }
 }
 
 /// Client proof computed using HMAC-SHA256 and client key.
@@ -134,6 +155,24 @@ pub struct AuthChallenge {
 pub struct AuthResponse {
     pub device_id: String,
     pub proof: String,
+    #[serde(default)]
+    pub client_protocol_version: u32,
+    #[serde(default)]
+    pub client_version: String,
+    #[serde(default)]
+    pub version_code: u64,
+}
+
+impl AuthResponse {
+    pub fn new(device_id: String, proof: String) -> Self {
+        Self {
+            device_id,
+            proof,
+            client_protocol_version: crate::PROTOCOL_VERSION,
+            client_version: "0.1.0".to_string(),
+            version_code: 100,
+        }
+    }
 }
 
 /// Authentication result returned to client.
@@ -142,6 +181,34 @@ pub struct AuthResponse {
 pub struct AuthResult {
     pub success: bool,
     pub error: Option<String>,
+    #[serde(default = "default_true")]
+    pub protocol_compatible: bool,
+    #[serde(default)]
+    pub agent_protocol_version: u32,
+    #[serde(default)]
+    pub min_compatible_version: u32,
+}
+
+impl AuthResult {
+    pub fn ok() -> Self {
+        Self {
+            success: true,
+            error: None,
+            protocol_compatible: true,
+            agent_protocol_version: crate::PROTOCOL_VERSION,
+            min_compatible_version: crate::MIN_COMPATIBLE_VERSION,
+        }
+    }
+
+    pub fn err(msg: impl Into<String>) -> Self {
+        Self {
+            success: false,
+            error: Some(msg.into()),
+            protocol_compatible: true,
+            agent_protocol_version: crate::PROTOCOL_VERSION,
+            min_compatible_version: crate::MIN_COMPATIBLE_VERSION,
+        }
+    }
 }
 
 /// Generate cryptographically secure random bytes.

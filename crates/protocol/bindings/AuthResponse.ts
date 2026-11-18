@@ -3,4 +3,4 @@
 /**
  * Client proof computed using HMAC-SHA256 and client key.
  */
-export type AuthResponse = { device_id: string, proof: string, };
+export type AuthResponse = { device_id: string, proof: string, client_protocol_version: number, client_version: string, version_code: bigint, };
