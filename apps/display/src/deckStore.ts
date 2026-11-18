@@ -148,7 +148,7 @@ export const useDeckStore = create<DeckState>((set) => ({
     },
   ],
   activePage: 0,
-  totalPages: 3,
+  totalPages: 4,
   isDimmed: false,
   isAmbient: false,
   volumeKeyPaging: true,

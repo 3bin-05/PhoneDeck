@@ -24,7 +24,9 @@ import {
   Moon,
   AppWindow,
   Download,
+  Bot,
 } from 'lucide-react';
+import { AiSessionsWidget, AiQuotasWidget } from '@phone-deck/widgets';
 
 interface PairingStatus {
   qr_svg: string;
@@ -52,7 +54,7 @@ interface AdbStatus {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<
-    'status' | 'devices' | 'editor' | 'apps' | 'shortcuts' | 'rules' | 'ambient' | 'settings'
+    'status' | 'devices' | 'ai' | 'editor' | 'apps' | 'shortcuts' | 'rules' | 'ambient' | 'settings'
   >('status');
   const [pairingStatus, setPairingStatus] = useState<PairingStatus | null>(null);
   const [countdown, setCountdown] = useState<number>(120);
@@ -242,6 +244,7 @@ export default function App() {
           {[
             { id: 'status', label: 'Monitor', icon: Monitor },
             { id: 'devices', label: 'Pairing & Devices', icon: QrCode },
+            { id: 'ai', label: 'AI Agents & Quotas', icon: Bot },
             { id: 'editor', label: 'Layout Editor', icon: SlidersHorizontal },
             { id: 'apps', label: 'Apps', icon: AppWindow },
             { id: 'shortcuts', label: 'Shortcuts', icon: Command },
@@ -566,6 +569,41 @@ export default function App() {
                   {adbMessage}
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'ai' && (
+          <div className="max-w-5xl mx-auto space-y-6">
+            <div className="p-6 rounded-2xl bg-[#050508] border border-white/[0.08] flex items-center justify-between">
+              <div className="space-y-1.5 max-w-xl">
+                <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-[#7C5CFF]/10 text-[#7C5CFF] text-[11px] font-mono font-medium border border-[#7C5CFF]/20">
+                  <Bot className="w-3 h-3" />
+                  AI CODING AGENTS &amp; LIVE QUOTAS BRIDGE
+                </div>
+                <h2 className="text-lg font-semibold tracking-tight text-[#EDEDF2]">
+                  Claude Code · OpenAI Codex · Google Antigravity
+                </h2>
+                <p className="text-xs text-[#71717A] leading-relaxed">
+                  Real-time telemetry, session monitors, quota resets, and prompt actions streamed directly to your Phone Deck display or USB deck.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="px-3.5 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] text-right font-mono">
+                  <div className="text-[10px] text-[#71717A] uppercase">Active Sessions</div>
+                  <div className="text-sm font-semibold text-[#00E599]">3 Connected</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="min-h-[440px]">
+                <AiSessionsWidget />
+              </div>
+              <div className="min-h-[440px]">
+                <AiQuotasWidget />
+              </div>
             </div>
           </div>
         )}

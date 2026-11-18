@@ -10,6 +10,8 @@ export * from './components/AgentInboxWidget';
 export * from './components/ShortcutGridWidget';
 export * from './components/MediaWidgets';
 export * from './components/AppWidgets';
+export * from './components/AiWidgets';
+export * from './components/AudioMixerWidget';
 
 import {
   DigitalClockWidget,

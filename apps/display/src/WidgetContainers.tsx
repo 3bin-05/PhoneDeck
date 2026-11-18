@@ -22,7 +22,12 @@ import {
   AppTileWidget,
   AppCardWidget,
   AppDockWidget,
+  AiSessionsWidget,
+  AiQuotasWidget,
+  QuotaRingWidget,
+  AudioMixerWidget,
   type AppRuntimeData,
+  type AiSessionItem,
 } from '@phone-deck/widgets';
 import { useMetric, useEvents, useDeckStore } from './deckStore';
 import {
@@ -589,3 +594,66 @@ export const AppDockContainer: React.FC = React.memo(() => {
   );
 });
 AppDockContainer.displayName = 'AppDockContainer';
+
+/**
+ * AI Coding Sessions Dashboard Container (Claude Code, Codex, Antigravity)
+ */
+export const AiSessionsContainer: React.FC = React.memo(() => {
+  const events = useEvents();
+
+  // Map incoming events to session items
+  const dynamicSessions: AiSessionItem[] = events.map((e, idx) => ({
+    id: e.id || `session-${idx}`,
+    agent: (e.agent?.toLowerCase().includes('claude') ? 'claude' : e.agent?.toLowerCase().includes('codex') ? 'codex' : 'antigravity') as any,
+    project: e.project || 'Active Workspace',
+    status: (e.kind === 'approval' ? 'waiting' : e.kind === 'done' ? 'idle' : 'working') as any,
+    model: e.agent,
+    currentTool: e.kind === 'approval' ? 'Permission Required' : 'Executing Task',
+    currentAction: e.summary || e.title,
+    tokensTotal: e.stats?.insertions ? (e.stats.insertions + e.stats.deletions) * 45 : undefined,
+    durationSec: e.stats?.duration_s || 120,
+  }));
+
+  return (
+    <AiSessionsWidget
+      sessions={dynamicSessions.length > 0 ? dynamicSessions : undefined}
+    />
+  );
+});
+AiSessionsContainer.displayName = 'AiSessionsContainer';
+
+/**
+ * AI Service Quota & Burn-Rate Tracker Container
+ */
+export const AiQuotasContainer: React.FC = React.memo(() => {
+  return <AiQuotasWidget />;
+});
+AiQuotasContainer.displayName = 'AiQuotasContainer';
+
+/**
+ * Compact Single Quota Ring Container
+ */
+export const QuotaRingContainer: React.FC<{
+  title?: string;
+  provider?: string;
+  usedPct?: number;
+  resetEta?: string;
+  accentColor?: string;
+}> = React.memo((props) => {
+  return <QuotaRingWidget {...props} />;
+});
+QuotaRingContainer.displayName = 'QuotaRingContainer';
+
+/**
+ * Application Audio Mixer & Panic Mute Container
+ */
+export const AudioMixerContainer: React.FC = React.memo(() => {
+  return (
+    <AudioMixerWidget
+      onChannelVolume={(_id, vol) => sendMediaVolume(vol)}
+      onChannelMute={(_id, _muted) => sendMediaAction('mute')}
+      onPanicMute={() => sendMediaAction('mute')}
+    />
+  );
+});
+AudioMixerContainer.displayName = 'AudioMixerContainer';
