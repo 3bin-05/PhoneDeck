@@ -277,6 +277,52 @@ pub async fn start_http_bridge(state: BridgeState) -> Result<(), String> {
                 },
             ),
         )
+        // GET /api/update/info
+        .route(
+            "/api/update/info",
+            get(|| async move {
+                Json(serde_json::json!({
+                    "version": "0.1.0",
+                    "apk_url": "/api/update/apk",
+                    "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "release_notes": "Phone Deck v0.1.0 Android Release"
+                }))
+            }),
+        )
+        // GET /api/update/apk (serves APK for phone self-update over LAN)
+        .route(
+            "/api/update/apk",
+            get(|| async move {
+                let candidate_paths = [
+                    std::path::PathBuf::from("./phone-deck-display.apk"),
+                    std::path::PathBuf::from("../display/phone-deck-display.apk"),
+                    std::path::PathBuf::from("./data/phone-deck-display.apk"),
+                ];
+
+                for path in candidate_paths {
+                    if path.exists() {
+                        if let Ok(bytes) = std::fs::read(&path) {
+                            return (
+                                [
+                                    (
+                                        axum::http::header::CONTENT_TYPE,
+                                        "application/vnd.android.package-archive",
+                                    ),
+                                    (
+                                        axum::http::header::CONTENT_DISPOSITION,
+                                        "attachment; filename=\"phone-deck-display.apk\"",
+                                    ),
+                                ],
+                                bytes,
+                            )
+                                .into_response();
+                        }
+                    }
+                }
+
+                (StatusCode::NOT_FOUND, "No APK available on Agent").into_response()
+            }),
+        )
         .with_state(state)
         .layer(CorsLayer::permissive());
 

@@ -1,0 +1,7 @@
+{
+  "name": "@phone-deck/android-plugin",
+  "version": "0.1.0",
+  "description": "Unified Android Kotlin plugin for Phone Deck",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts"
+}

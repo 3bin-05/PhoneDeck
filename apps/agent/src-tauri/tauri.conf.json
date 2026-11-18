@@ -13,12 +13,16 @@
     "windows": [
       {
         "title": "Phone Deck Agent",
-        "width": 960,
-        "height": 680,
+        "width": 1040,
+        "height": 720,
         "resizable": true,
         "fullscreen": false
       }
     ],
+    "trayIcon": {
+      "iconPath": "icons/32x32.png",
+      "tooltip": "Phone Deck Agent"
+    },
     "security": {
       "csp": null
     }
@@ -32,6 +36,12 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": false
+      }
+    }
   }
 }
