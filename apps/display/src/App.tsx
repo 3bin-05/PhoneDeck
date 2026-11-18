@@ -13,7 +13,9 @@ import {
   Volume2,
   ShieldAlert,
   Download,
+  Sparkles,
 } from 'lucide-react';
+import { PairingView } from './PairingView';
 import { useUpdaterStore } from './updaterStore';
 import {
   useDeckStore,
@@ -122,6 +124,7 @@ export default function App() {
   const [pairUriInput, setPairUriInput] = useState('');
   const [pairingLoading, setPairingLoading] = useState(false);
   const [pairingMessage, setPairingMessage] = useState<string | null>(null);
+  const [isDemoMode, setIsDemoMode] = useState(false);
 
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
     paired: false,
@@ -198,6 +201,52 @@ export default function App() {
     );
   }
 
+  // Part B: Unpaired / Connecting Setup Screen (never fake mock data on cold start)
+  if (!isDemoMode && (!connectionStatus.paired || (!connectionStatus.connected && !connected))) {
+    return (
+      <PairingView
+        paired={connectionStatus.paired}
+        connected={connected || connectionStatus.connected}
+        agentId={connectionStatus.agent_id}
+        activeHost={connectionStatus.active_host}
+        error={connectionStatus.error}
+        onPair={async (uri) => {
+          if (isTauri) {
+            try {
+              const { invoke } = await import('@tauri-apps/api/core');
+              const res = await invoke<ConnectionStatus>('pair_with_uri', {
+                pairUri: uri,
+                deviceName: 'Phone Deck Display (Mobile)',
+              });
+              setConnectionStatus(res);
+              return res.paired;
+            } catch (err: any) {
+              setConnectionStatus((prev) => ({ ...prev, error: String(err) }));
+              return false;
+            }
+          } else {
+            setConnectionStatus({ paired: true, connected: true, agent_id: 'phone-deck-pc' });
+            return true;
+          }
+        }}
+        onUnpair={async () => {
+          if (isTauri) {
+            try {
+              const { invoke } = await import('@tauri-apps/api/core');
+              await invoke('unpair_device');
+              setConnectionStatus({ paired: false, connected: false });
+            } catch (err) {
+              console.error('Unpair error:', err);
+            }
+          } else {
+            setConnectionStatus({ paired: false, connected: false });
+          }
+        }}
+        onEnterDemo={() => setIsDemoMode(true)}
+      />
+    );
+  }
+
   return (
     <div
       style={{
@@ -218,6 +267,22 @@ export default function App() {
             className="text-[10px] uppercase font-semibold text-amber-200 hover:text-white px-1.5 py-0.5 rounded bg-amber-500/20 cursor-pointer"
           >
             RETURN TO DARK ✕
+          </button>
+        </div>
+      )}
+
+      {/* Demo Mode Banner */}
+      {isDemoMode && (
+        <div className="h-7 bg-amber-500/15 border-b border-amber-500/30 px-4 flex items-center justify-between text-[11px] font-mono text-amber-300 z-30 shrink-0">
+          <span className="flex items-center space-x-1.5 font-semibold">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>DEMO MODE (OFFLINE MOCK DATA)</span>
+          </span>
+          <button
+            onClick={() => setIsDemoMode(false)}
+            className="text-[10px] uppercase font-semibold text-amber-200 hover:text-white px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 cursor-pointer border border-amber-500/30"
+          >
+            CONNECT TO PC &rarr;
           </button>
         </div>
       )}
@@ -305,15 +370,29 @@ export default function App() {
         <div className="flex items-center space-x-2">
           {/* Pairing status button */}
           <button
-            onClick={() => setShowPairModal(true)}
+            onClick={() => {
+              if (isDemoMode) {
+                setIsDemoMode(false);
+              } else {
+                setShowPairModal(true);
+              }
+            }}
             className={`flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] border transition-colors ${
-              connectionStatus.paired || connected
+              connected
                 ? 'bg-[#00E599]/10 border-[#00E599]/30 text-[#00E599]'
+                : isDemoMode
+                ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
                 : 'bg-white/[0.04] border-white/[0.08] text-[#71717A] hover:text-[#EDEDF2]'
             }`}
           >
             <Shield className="w-3 h-3" />
-            <span>{connected ? 'LIVE TLS' : 'MOCK/OFFLINE'}</span>
+            <span>
+              {connected
+                ? `LIVE TLS${connectionStatus.active_host ? ` · ${connectionStatus.active_host.split(':')[0]}` : ''}`
+                : isDemoMode
+                ? 'DEMO (MOCK)'
+                : 'OFFLINE'}
+            </span>
           </button>
 
           {/* Budget HUD toggle */}
@@ -901,6 +980,22 @@ export default function App() {
                   </>
                 )}
               </button>
+
+              {connectionStatus.paired && (
+                <button
+                  onClick={async () => {
+                    if (isTauri) {
+                      const { invoke } = await import('@tauri-apps/api/core');
+                      await invoke('unpair_device');
+                    }
+                    setConnectionStatus({ paired: false, connected: false });
+                    setShowPairModal(false);
+                  }}
+                  className="w-full py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs transition-colors cursor-pointer"
+                >
+                  Disconnect &amp; Unpair from PC
+                </button>
+              )}
             </div>
           </div>
         </div>

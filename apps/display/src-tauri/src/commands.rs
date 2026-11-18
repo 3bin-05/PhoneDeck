@@ -2,10 +2,11 @@ use crate::client::ConnectionStatus;
 use crate::updater::{DisplayUpdateStatus, DisplayUpdaterConfig};
 use crate::DisplayAppState;
 use protocol::updater::AndroidReleaseManifest;
-use tauri::State;
+use tauri::{Emitter, State};
 
 #[tauri::command]
 pub async fn pair_with_uri(
+    app: tauri::AppHandle,
     state: State<'_, DisplayAppState>,
     pair_uri: String,
     device_name: Option<String>,
@@ -15,15 +16,24 @@ pub async fn pair_with_uri(
 
     match state.client_mgr.pair_with_uri(&pair_uri, device_id, name).await {
         Ok(config) => {
-            let mut status = state.status.lock().unwrap();
-            status.paired = true;
-            status.agent_id = Some(config.agent_id);
-            status.error = None;
-            Ok(status.clone())
+            let res = {
+                let mut status = state.status.lock().unwrap();
+                status.paired = true;
+                status.agent_id = Some(config.agent_id);
+                status.error = None;
+                status.clone()
+            };
+            let _ = app.emit("deck-status", &res);
+            state.reconnect_notify.notify_one();
+            Ok(res)
         }
         Err(e) => {
-            let mut status = state.status.lock().unwrap();
-            status.error = Some(e.clone());
+            let res = {
+                let mut status = state.status.lock().unwrap();
+                status.error = Some(e.clone());
+                status.clone()
+            };
+            let _ = app.emit("deck-status", &res);
             Err(e)
         }
     }
@@ -36,15 +46,41 @@ pub fn get_connection_status(state: State<'_, DisplayAppState>) -> ConnectionSta
 }
 
 #[tauri::command]
-pub fn unpair_device(state: State<'_, DisplayAppState>) -> bool {
+pub async fn send_deck_action(
+    state: State<'_, DisplayAppState>,
+    message: String,
+) -> Result<bool, String> {
+    let tx_opt = state.action_tx.lock().await;
+    if let Some(ref tx) = *tx_opt {
+        tx.send(message).map_err(|e| e.to_string())?;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+#[tauri::command]
+pub async fn unpair_device(
+    app: tauri::AppHandle,
+    state: State<'_, DisplayAppState>,
+) -> Result<bool, String> {
     state.client_mgr.clear_config();
-    let mut status = state.status.lock().unwrap();
-    status.paired = false;
-    status.connected = false;
-    status.agent_id = None;
-    status.active_host = None;
-    status.error = None;
-    true
+    let res = {
+        let mut status = state.status.lock().unwrap();
+        status.paired = false;
+        status.connected = false;
+        status.agent_id = None;
+        status.active_host = None;
+        status.error = None;
+        status.clone()
+    };
+    {
+        let mut tx_opt = state.action_tx.lock().await;
+        *tx_opt = None;
+    }
+    let _ = app.emit("deck-status", &res);
+    state.reconnect_notify.notify_one();
+    Ok(true)
 }
 
 #[tauri::command]
