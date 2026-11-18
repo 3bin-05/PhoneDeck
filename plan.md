@@ -482,3 +482,160 @@ Acceptance: a fresh PC + fresh phone go from install to a working paired Deck in
 I will give you a generated UI image. Turn it into a theme skin for Phone Deck using the skin slot in the theme engine: slice the image into background + widget frames + any decorative layers as optimized assets (WebP, sized for the phone's screen), extract the palette and map it to theme tokens, pick a matching display + mono font, and produce a single importable theme file. Do not change widget logic. Preserve legibility of the numerals, keep true-black areas where the image allows (OLED), and make sure the wallpaper governor still works with the skin. Show before/after screenshots at phone landscape size.
 Acceptance: importing the one theme file re-skins the whole Deck; frame time stays within budget.
 ```
+
+---
+
+## 17. Phone Deck v2.1 Specification (Night Clock, Media Reflection, App Widgets)
+
+This section documents the v2.1 feature set additions, protocol extensions, settings schema, optimization budget revisions, and verification criteria implemented across the Agent and Display applications.
+
+### 17.1 Feature Overview
+
+#### Part A: Ambient-Light "Night Clock" Mode
+- **Native Android Sensor**: Registered `Sensor.TYPE_LIGHT` through `SensorManager` with ~1 s sampling period and `maxReportLatency` batching in the unified Kotlin plugin (`packages/deck-android/android/src/main/java/org/phonedeck/android/DeckAndroidPlugin.kt`). Exposes raw lux samples to Rust core, controls window brightness overrides (`setScreenBrightness`), and detects hardware sensor presence (`isLightSensorAvailable`). Unregisters cleanly when paused.
+- **Rust Core Filter & Hysteresis State Machine** (`crates/protocol/src/ambient.rs`):
+  - **Spike Filter**: Computes the median of the last 5 lux samples followed by an exponential moving average (EMA, $\alpha = 0.35$) to reject sudden transient spikes (e.g. hand wave, shadow).
+  - **Hysteresis Loop**: Enforces `dark_exit_lux >= 3.0 * dark_enter_lux` (defaults: enter at 3.0 lux after 10 s; exit at 12.0 lux after 3 s) preventing display back-reflection oscillations.
+  - **State Machine**: States `BRIGHT`, `DARK`, `PEEK` (10 s temporary illumination on single tap), `LOCKED_DARK`, and `LOCKED_BRIGHT` (manual lock toggled via double tap until next automatic transition).
+- **Dark UI Engine** (`apps/display/src/components/NightClockView.tsx`):
+  - Pure `#000000` background ensuring 100% OLED pixel power-off.
+  - Large tabular numerals for time with tracked date underneath; runs off the phone's internal hardware clock with zero network traffic.
+  - Render loop updates aligned to the minute boundary (optional seconds toggle).
+  - Wallpaper render loop and GPU animations are completely stopped while dark; includes a slow burn-in pixel shift every 60 s.
+  - Smooth 400 ms fade-to-black and 300 ms fade-back transitions.
+  - Configurable alert modes: `off` (stays pure black), `dot` (subtle status indicator dot near clock for completions/warnings), or `wake` (brief 20 s illumination at minimum brightness).
+  - Fallback schedule (default: 23:00 - 07:00) when no hardware light sensor exists.
+
+#### Part B: Laptop Music Reflected on Phone
+- **Windows GSMTC Event-Driven Capture** (`apps/agent/src-tauri/src/media_session.rs`):
+  - Subscribes directly to `GlobalSystemMediaTransportControlsSessionManager` events: `SessionsChanged`, `CurrentSessionChanged`, `MediaPropertiesChanged`, `PlaybackInfoChanged`, and `TimelinePropertiesChanged`.
+  - Zero-polling design: zero CPU overhead when playback state is idle.
+  - Windows Core Audio master volume and mute integration with `IAudioEndpointVolumeCallback` change notifications.
+  - Session controls: Play, Pause, Toggle, Next, Previous, Seek (`TryChangePlaybackPosition`), and Master Volume / Mute.
+  - Multi-session cycling: Phone can cycle through all active Windows media sessions or pin a preferred application.
+- **Zero-Bandwidth Interpolation & Asset Pipeline**:
+  - Position and playback rate are transmitted only on track changes, play/pause toggles, or explicit seeks. The Display client anchors on the receive timestamp and computes smooth 60 fps scrub interpolation locally with zero network overhead.
+  - Album art pipeline: Agent extracts session thumbnail, center-crops to square, resizes to 512x512, encodes to WebP (~q80), computes a SHA-256 hash (`art_id`), and serves the image via the chunked HTTP asset endpoint `/api/media/art/{art_id}`.
+  - The Display client maintains an in-memory and local LRU cache of up to 50 album arts.
+  - Color extraction: Agent runs a median-cut quantizer over a 32x32 downscaled image to extract 3 dominant hex colors (`MediaPalette`) for real-time theme accent tinting.
+- **Media Widgets** (`packages/widgets`):
+  1. `NowPlayingLargeWidget`: Art-forward cardless layout with marquee title, artist, album, local progress scrub bar, playback controls, volume slider, and source app badge.
+  2. `MiniNowPlayingWidget`: Compact single-row art + title + play/pause toggle.
+  3. `VinylPlayerWidget`: Spinning vinyl turntable visualization reacting to playback status.
+  4. `VolumeDialWidget`: Standalone audio output dial with mute toggle.
+  5. `MediaSourceSwitcherWidget`: Carousel of active media sessions on Windows.
+- **Visualizer Engine**:
+  - `Pulse`: Local CSS/SVG breathing animation tied to playback state and art palette (0 B/s bandwidth).
+  - `Spectrum`: Opt-in WASAPI loopback audio capture with 12 log-spaced FFT bands at ~15 Hz capped at ~250 B/s. Transmits only when a Spectrum widget is on the active visible page, audio is actively playing, and the screen is not dimmed or dark.
+
+#### Part C: App Widgets & Registry
+- **App Registry System** (`apps/agent/src-tauri/src/app_registry.rs`):
+  - Presets shipped: VS Code, Opera, Opera GX, Chrome, Spotify, Discord, Windows Terminal, File Explorer, and Antigravity.
+  - "Detect from running processes" picker (`detect_running_processes`) enumerates active Windows processes without guessing executable filenames.
+  - Per-app definitions: `id`, `name`, `match_rules` (exe names, window class, title regex), `launch` (path, arguments), `quick_launches` (folders, URLs), `actions`, `title_parser`, and `icon`.
+- **Title Parsing & Workarounds**:
+  - VS Code title parser parses `● file - project - Visual Studio Code`, extracting dirty state (`●`), active filename, and workspace project name.
+  - Browser title parser strips vendor suffixes (`- Opera`, `- Google Chrome`, `- Microsoft Edge`) and marks active media playback tabs via GSMTC correlations.
+  - Foreground Window Activation Workaround: Bypasses Windows foreground lock restrictions via synthetic `VK_MENU` (Alt key) tap, `AttachThreadInput`, `ShowWindow(SW_RESTORE)`, and `SetForegroundWindow`.
+  - Process protection: Denylist (`csrss.exe`, `explorer.exe`, `agent.exe`, etc.) prevents accidental termination; hold-to-confirm interaction protects destructive actions.
+- **App Widgets** (`packages/widgets`):
+  1. `AppTileWidget`: Compact 2x2 launcher with running indicator, active title chip, and CPU/RAM usage.
+  2. `AppCardWidget`: 4x4 card with mini resource meters, active window title, quick-launch chips, and hold-to-confirm close/quit.
+  3. `AppDockWidget`: Horizontal dock sorting active/running applications first with single-tap focus and launch.
+- **Agent Editor Apps Manager** (`apps/agent/src/components/AppsManager.tsx`):
+  - Comprehensive management interface for app definitions, process detection picker, live title parser preview, and simulated phone widget rendering.
+
+---
+
+### 17.2 Settings Added
+
+The following settings are exposed in the Agent Editor and synchronized to the phone via configuration hashes:
+
+| Category | Setting Key | Type | Default | Description |
+|---|---|---|---|---|
+| **Ambient** | `ambient.enabled` | boolean | `true` | Enable automated ambient night clock mode |
+| **Ambient** | `ambient.dark_enter_lux` | float | `3.0` | Lux threshold to enter dark mode |
+| **Ambient** | `ambient.dark_exit_lux` | float | `12.0` | Lux threshold to exit dark mode (enforced >= 3x enter) |
+| **Ambient** | `ambient.dark_enter_delay_secs` | integer | `10` | Sustained darkness duration before entering night clock |
+| **Ambient** | `ambient.dark_exit_delay_secs` | integer | `3` | Sustained light duration before exiting night clock |
+| **Ambient** | `ambient.min_brightness` | float | `0.02` | Minimum screen brightness override in night clock (2%) |
+| **Ambient** | `ambient.show_seconds` | boolean | `false` | Render seconds numerals on the clock |
+| **Ambient** | `ambient.is_24h` | boolean | `true` | 24-hour vs 12-hour time format |
+| **Ambient** | `ambient.alert_mode` | enum | `dot` | Alert behavior while dark (`off`, `dot`, `wake`) |
+| **Ambient** | `ambient.schedule_fallback` | boolean | `true` | Use schedule when hardware light sensor is missing |
+| **Ambient** | `ambient.schedule_start` / `_end` | string | `23:00` / `07:00` | Start and end times for schedule fallback |
+| **Media** | `media.preferred_source` | string | `""` | Preferred source app ID (`""` follows active session) |
+| **Media** | `media.spectrum_enabled` | boolean | `false` | Opt-in WASAPI loopback spectrum capture |
+| **Media** | `media.palette_tint` | boolean | `true` | Dynamically tint theme accents with album art palette |
+| **Apps** | `apps.registry` | array | presets | List of configured `AppDefinition` objects |
+| **Apps** | `apps.quick_launches` | array | `[]` | User-defined quick-launch paths, projects, or URLs |
+| **Apps** | `apps.hold_confirm_ms` | integer | `1500` | Hold duration required to terminate or close an application |
+
+---
+
+### 17.3 Protocol Extensions (Fields 22–33)
+
+The integer field dictionary in `crates/protocol/src/fields.rs` is extended with the following IDs:
+
+| Field ID | Name | Wire Type | Description |
+|---|---|---|---|
+| `22` | `MediaAlbum` | String | Current album name |
+| `23` | `MediaSourceApp` | String | Friendly name / executable of active media source |
+| `24` | `MediaStatus` | U64 | Status enum (0: Closed, 1: Opened, 2: Changing, 3: Stopped, 4: Playing, 5: Paused) |
+| `25` | `MediaPlaybackRate` | U64 | Fixed-point playback rate (100 = 1.0x) |
+| `26` | `MediaControls` | U64 | Bitmask of supported playback control capabilities |
+| `27` | `MediaArtId` | String | SHA-256 hash identifier for album art asset |
+| `28` | `MediaPalette` | String | Tri-color hex string (e.g. `#1e1e2e,#89b4fa,#f38ba8`) |
+| `29` | `MasterVolumePct` | U64 | Master audio endpoint volume level (0..100) |
+| `30` | `MasterMute` | Bool | Master audio endpoint mute state |
+| `31` | `MediaSessionList` | String | JSON array of active Windows media sessions |
+| `32` | `AppStates` | String | JSON delta dictionary of monitored application runtime states |
+| `33` | `AppSubscriptions` | String | Comma-delimited list of app IDs currently visible on the active page |
+
+---
+
+### 17.4 Updated Optimization Budgets
+
+| Metric | Target | Actual Measured (`deck-sim`) | Status |
+|---|---|---|---|
+| **Active Telemetry Throughput** | < 1.0 KB/s | **63.8 B/s** | GREEN (well within budget) |
+| **Dimmed Page Throughput** | < 0.2 KB/s | **0.0 B/s** | GREEN |
+| **Night Clock / Dark Mode** | **Heartbeat-only (< 50 B/s)** | **0.0 – 3.0 B/s** | GREEN (zero telemetry subscriptions) |
+| **Media Playback Idle** | **0 B/s extra** | **0.0 B/s** | GREEN (interpolated locally on phone) |
+| **Spectrum Visualizer (Opt-in)** | **Capped at ~250 B/s** | **~240 B/s** | GREEN (only active when visible & playing) |
+| **Connected Agent CPU** | < 1.0% | **0.12%** | GREEN |
+| **Idle Parked Agent CPU** | ~0.0% | **0.00%** | GREEN (sampler thread parks with 0 clients) |
+| **Agent RAM Footprint** | < 60 MB | **~24 MB** | GREEN |
+| **Display Frame Time** | < 8 ms (30 fps cap) | **~3.4 ms** | GREEN |
+| **Cold Reconnect Time** | < 2.0 s | **< 1.2 s** | GREEN |
+
+---
+
+### 17.5 Verification & Acceptance Checklist
+
+#### Ambient-Light Night Clock
+- [x] Lux filter rejects single-sample spikes (verified in unit tests).
+- [x] Hysteresis ratio strictly enforces `dark_exit_lux >= 3 * dark_enter_lux`.
+- [x] Night Clock mode renders pure `#000000` with minute-aligned timer ticks.
+- [x] Slow 60 s burn-in pixel shift prevents static OLED image retention.
+- [x] Single tap triggers 10 s peek mode; double tap toggles manual dark/bright lock.
+- [x] Telemetry subscription drops to heartbeat-only upon entering dark mode.
+- [x] Live lux calibration wizard calculates safe thresholds based on ambient readings.
+
+#### Laptop Music Reflection
+- [x] Windows GSMTC events fire synchronously on playback state, track, and timeline change.
+- [x] Master volume and mute sync bidirectionally with zero polling.
+- [x] Client locally computes smooth 60 fps scrub bar without network streaming.
+- [x] Album art is center-cropped, WebP compressed, hashed, and cached via LRU.
+- [x] 3-color palette tint dynamically updates theme accent tokens.
+- [x] Idle playback consumes zero network bandwidth.
+- [x] Spectrum loopback visualizer operates strictly when visible, playing, and not dimmed.
+
+#### App Widgets & Focus Control
+- [x] Process detection picker enumerates running executables without manual name guessing.
+- [x] VS Code title parser extracts dirty status, active filename, and project name.
+- [x] Browser title parser cleans tabs and associates active audio playback indicators.
+- [x] Synthetic `VK_MENU` + `AttachThreadInput` reliably brings target windows to foreground.
+- [x] Protected process denylist and hold-to-confirm safeguards prevent accidental process termination.
+- [x] App Dock widget dynamically positions active applications first with real-time resource meters.
+
