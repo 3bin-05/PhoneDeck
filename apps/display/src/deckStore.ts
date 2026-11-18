@@ -28,10 +28,12 @@ export interface DeckState {
   stats: PerformanceStats;
   theme: ThemeConfig;
   deckConfig: DeckConfiguration;
+  artBaseUrl: string;
 
   // Actions
   setTheme: (theme: ThemeConfig) => void;
   setDeckConfig: (config: DeckConfiguration) => void;
+  setArtBaseUrl: (url: string) => void;
   applyMetricBatch: (updates: Record<number, any>) => void;
   addEvent: (event: AgentEvent) => void;
   removeEvent: (eventId: string) => void;
@@ -61,12 +63,25 @@ const DEFAULT_METRICS: Record<number, number | string | boolean | null> = {
   15: 85, // Phone Battery 85%
   16: true, // Phone Charging true
   17: true, // Media Playing
-  18: 'Selected Ambient Works',
-  19: 'Aphex Twin',
+  18: 'Selected Ambient Works', // Media Title
+  19: 'Aphex Twin', // Media Artist
+  20: 84, // Media Position Sec
+  21: 278, // Media Duration Sec
+  22: 'Selected Ambient Works 85-92', // Media Album
+  23: 'Spotify', // Media Source App
+  24: 'playing', // Media Status
+  25: 1000, // Media Playback Rate (1000 = 1.0x)
+  26: 127, // Media Controls flags
+  27: 'mock-art-aphex-saw', // Media Art ID
+  28: '#7C5CFF,#18181B,#00E599', // Media Palette
+  29: 75, // Master Volume Pct
+  30: false, // Master Mute
+  31: '["Spotify", "Opera GX", "Google Chrome", "VLC Media Player"]', // Session List
 };
 
 export const useDeckStore = create<DeckState>((set) => ({
   metrics: DEFAULT_METRICS,
+  artBaseUrl: 'http://127.0.0.1:8765/api/media/art',
   events: [
     {
       id: 'task-initial',
@@ -103,6 +118,7 @@ export const useDeckStore = create<DeckState>((set) => ({
   deckConfig: DEFAULT_DECK_CONFIG,
 
   setTheme: (theme) => set({ theme }),
+  setArtBaseUrl: (artBaseUrl) => set({ artBaseUrl }),
   setDeckConfig: (deckConfig) =>
     set({
       deckConfig,

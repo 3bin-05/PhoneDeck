@@ -20,6 +20,13 @@ use tower_http::cors::CorsLayer;
 
 static SEQ: AtomicU64 = AtomicU64::new(1);
 static IS_DARK: AtomicBool = AtomicBool::new(false);
+static MEDIA_PLAYING: AtomicBool = AtomicBool::new(true);
+static MEDIA_TRACK_INDEX: AtomicU64 = AtomicU64::new(0);
+static MEDIA_POSITION_SEC: AtomicU64 = AtomicU64::new(42);
+static MEDIA_VOLUME_PCT: AtomicU64 = AtomicU64::new(75);
+static MEDIA_MUTE: AtomicBool = AtomicBool::new(false);
+static MEDIA_SESSION_INDEX: AtomicU64 = AtomicU64::new(0);
+static MEDIA_DIRTY: AtomicBool = AtomicBool::new(true);
 
 type AppState = Arc<broadcast::Sender<Vec<u8>>>;
 
@@ -45,6 +52,39 @@ async fn main() {
             "/ws",
             get(|ws: WebSocketUpgrade, State(tx): State<AppState>| async move {
                 ws.on_upgrade(move |socket| handle_socket(socket, tx))
+            }),
+        )
+        // Mock album art endpoint
+        .route(
+            "/api/media/art/{art_id}",
+            get(|axum::extract::Path(_art_id): axum::extract::Path<String>| async move {
+                let track_idx = MEDIA_TRACK_INDEX.load(Ordering::SeqCst) % 3;
+                let (color1, color2, track_name) = match track_idx {
+                    0 => ("#7C5CFF", "#00E599", "ALBERTO BALSALM"),
+                    1 => ("#FF3B5C", "#7C5CFF", "WINDOWLICKER"),
+                    _ => ("#FFB800", "#7C5CFF", "XTAL"),
+                };
+
+                let svg = format!(
+                    r##"<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+                      <defs>
+                        <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stop-color="{}" />
+                          <stop offset="60%" stop-color="#121217" />
+                          <stop offset="100%" stop-color="{}" />
+                        </linearGradient>
+                      </defs>
+                      <rect width="512" height="512" fill="url(#g)" />
+                      <circle cx="256" cy="256" r="160" fill="#0A0A0E" stroke="#27272A" stroke-width="4"/>
+                      <circle cx="256" cy="256" r="110" fill="none" stroke="#27272A" stroke-width="1.5" stroke-dasharray="3,6"/>
+                      <circle cx="256" cy="256" r="60" fill="{}" opacity="0.85"/>
+                      <circle cx="256" cy="256" r="14" fill="#FFFFFF"/>
+                      <text x="256" y="445" font-family="monospace" font-size="20" font-weight="bold" fill="#FFFFFF" text-anchor="middle" letter-spacing="4">APHEX TWIN</text>
+                      <text x="256" y="475" font-family="monospace" font-size="13" fill="#A1A1AA" text-anchor="middle">{}</text>
+                    </svg>"##,
+                    color1, color2, color1, track_name
+                );
+                ([(axum::http::header::CONTENT_TYPE, "image/svg+xml")], svg)
             }),
         )
         .with_state(state)
@@ -102,6 +142,55 @@ async fn handle_socket(socket: WebSocket, tx: AppState) {
                                 }
                             }
                         }
+
+                        if let Some(media_act) = val.get("media_action").and_then(|a| a.as_str()) {
+                            match media_act {
+                                "play" => {
+                                    MEDIA_PLAYING.store(true, Ordering::SeqCst);
+                                    MEDIA_DIRTY.store(true, Ordering::SeqCst);
+                                }
+                                "pause" => {
+                                    MEDIA_PLAYING.store(false, Ordering::SeqCst);
+                                    MEDIA_DIRTY.store(true, Ordering::SeqCst);
+                                }
+                                "toggle" => {
+                                    let cur = MEDIA_PLAYING.load(Ordering::SeqCst);
+                                    MEDIA_PLAYING.store(!cur, Ordering::SeqCst);
+                                    MEDIA_DIRTY.store(true, Ordering::SeqCst);
+                                }
+                                "next" => {
+                                    MEDIA_TRACK_INDEX.fetch_add(1, Ordering::SeqCst);
+                                    MEDIA_POSITION_SEC.store(0, Ordering::SeqCst);
+                                    MEDIA_DIRTY.store(true, Ordering::SeqCst);
+                                }
+                                "prev" => {
+                                    let cur = MEDIA_TRACK_INDEX.load(Ordering::SeqCst);
+                                    MEDIA_TRACK_INDEX.store(if cur > 0 { cur - 1 } else { 2 }, Ordering::SeqCst);
+                                    MEDIA_POSITION_SEC.store(0, Ordering::SeqCst);
+                                    MEDIA_DIRTY.store(true, Ordering::SeqCst);
+                                }
+                                "cycle_source" => {
+                                    MEDIA_SESSION_INDEX.fetch_add(1, Ordering::SeqCst);
+                                    MEDIA_DIRTY.store(true, Ordering::SeqCst);
+                                }
+                                "mute" => {
+                                    let cur = MEDIA_MUTE.load(Ordering::SeqCst);
+                                    MEDIA_MUTE.store(!cur, Ordering::SeqCst);
+                                    MEDIA_DIRTY.store(true, Ordering::SeqCst);
+                                }
+                                _ => {}
+                            }
+                        }
+
+                        if let Some(seek) = val.get("media_seek").and_then(|s| s.as_u64()) {
+                            MEDIA_POSITION_SEC.store(seek, Ordering::SeqCst);
+                            MEDIA_DIRTY.store(true, Ordering::SeqCst);
+                        }
+
+                        if let Some(vol) = val.get("media_volume").and_then(|v| v.as_u64()) {
+                            MEDIA_VOLUME_PCT.store(vol.min(100), Ordering::SeqCst);
+                            MEDIA_DIRTY.store(true, Ordering::SeqCst);
+                        }
                     }
                 }
                 Message::Close(_) => {
@@ -157,11 +246,50 @@ async fn run_simulation_generator(tx: AppState) {
         curr_state.set(FieldId::UptimeSeconds, tick / 2 + 14200);
         curr_state.set(FieldId::PcBatteryPct, 82u8);
         curr_state.set(FieldId::PcBatteryCharging, true);
-        curr_state.set(FieldId::MediaPlaying, true);
-        curr_state.set(FieldId::MediaTitle, "Selected Ambient Works");
-        curr_state.set(FieldId::MediaArtist, "Aphex Twin");
-        curr_state.set(FieldId::MediaPositionSec, (tick % 240) as u32);
-        curr_state.set(FieldId::MediaDurationSec, 240u32);
+
+        // Media Mock state (Section 10 & Part B)
+        let is_playing = MEDIA_PLAYING.load(Ordering::SeqCst);
+        let track_idx = (MEDIA_TRACK_INDEX.load(Ordering::SeqCst) % 3) as usize;
+        let session_idx = (MEDIA_SESSION_INDEX.load(Ordering::SeqCst) % 4) as usize;
+        let vol_pct = MEDIA_VOLUME_PCT.load(Ordering::SeqCst) as u8;
+        let mute = MEDIA_MUTE.load(Ordering::SeqCst);
+
+        let tracks = [
+            ("Alberto Balsalm", "Aphex Twin", "...I Care Because You Do", 311u32, "#7C5CFF,#121217,#00E599"),
+            ("Windowlicker", "Aphex Twin", "Windowlicker EP", 367u32, "#FF3B5C,#121217,#7C5CFF"),
+            ("Xtal", "Aphex Twin", "Selected Ambient Works 85-92", 294u32, "#FFB800,#121217,#7C5CFF"),
+        ];
+        let sessions = ["Spotify", "Opera GX", "Google Chrome", "VLC Media Player"];
+
+        let (title, artist, album, duration, palette) = tracks[track_idx];
+        let source_app = sessions[session_idx];
+
+        if is_playing && tick % 2 == 0 {
+            let cur_pos = MEDIA_POSITION_SEC.load(Ordering::SeqCst);
+            if cur_pos >= duration as u64 {
+                MEDIA_POSITION_SEC.store(0, Ordering::SeqCst);
+                MEDIA_TRACK_INDEX.fetch_add(1, Ordering::SeqCst);
+            } else {
+                MEDIA_POSITION_SEC.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+        let pos = MEDIA_POSITION_SEC.load(Ordering::SeqCst) as u32;
+
+        curr_state.set(FieldId::MediaPlaying, is_playing);
+        curr_state.set(FieldId::MediaStatus, if is_playing { "playing" } else { "paused" });
+        curr_state.set(FieldId::MediaTitle, title);
+        curr_state.set(FieldId::MediaArtist, artist);
+        curr_state.set(FieldId::MediaAlbum, album);
+        curr_state.set(FieldId::MediaDurationSec, duration);
+        curr_state.set(FieldId::MediaPositionSec, pos);
+        curr_state.set(FieldId::MediaPlaybackRate, 1000u64); // 1.0x
+        curr_state.set(FieldId::MediaSourceApp, source_app);
+        curr_state.set(FieldId::MediaControls, "play,pause,next,prev,seek");
+        curr_state.set(FieldId::MediaArtId, format!("mock-art-{}", track_idx));
+        curr_state.set(FieldId::MediaPalette, palette);
+        curr_state.set(FieldId::MasterVolumePct, vol_pct as u64);
+        curr_state.set(FieldId::MasterMute, mute);
+        curr_state.set(FieldId::MediaSessionList, r#"["Spotify","Opera GX","Google Chrome","VLC Media Player"]"#);
 
         let is_dark = IS_DARK.load(Ordering::SeqCst);
 

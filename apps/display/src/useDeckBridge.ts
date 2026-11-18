@@ -3,6 +3,36 @@ import { decodeMsgPack, type AgentEvent } from '@phone-deck/ui-kit';
 import { useDeckStore } from './deckStore';
 import { useAmbientStore, registerAmbientSocketSender } from './ambientStore';
 
+let globalSocketSender: ((msg: string) => void) | null = null;
+
+export function sendDeckMessage(msg: Record<string, any>) {
+  if (globalSocketSender) {
+    try {
+      globalSocketSender(JSON.stringify(msg));
+    } catch (e) {
+      console.error('Failed to send deck message:', e);
+    }
+  }
+}
+
+export function sendMediaAction(
+  action: 'play' | 'pause' | 'toggle' | 'next' | 'prev' | 'cycle_source' | 'mute'
+) {
+  sendDeckMessage({ media_action: action });
+}
+
+export function sendMediaSeek(positionSec: number) {
+  sendDeckMessage({ media_seek: positionSec });
+}
+
+export function sendMediaVolume(volumePct: number) {
+  sendDeckMessage({ media_volume: volumePct });
+}
+
+export function sendMediaSource(sourceApp: string) {
+  sendDeckMessage({ media_source: sourceApp });
+}
+
 export function useDeckBridge(wsUrl: string = 'ws://127.0.0.1:8765/ws') {
   const socketRef = useRef<WebSocket | null>(null);
   const pendingUpdatesRef = useRef<Record<number, any>>({});
@@ -89,11 +119,27 @@ export function useDeckBridge(wsUrl: string = 'ws://127.0.0.1:8765/ws') {
         ws.binaryType = 'arraybuffer';
         socketRef.current = ws;
 
+        globalSocketSender = (msg) => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(msg);
+          }
+        };
+
         registerAmbientSocketSender((msg) => {
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(msg);
           }
         });
+
+        // Compute artBaseUrl from wsUrl
+        try {
+          const urlObj = new URL(wsUrl);
+          const protocol = urlObj.protocol === 'wss:' ? 'https:' : 'http:';
+          const artUrl = `${protocol}//${urlObj.hostname}:${urlObj.port || (urlObj.protocol === 'wss:' ? '443' : '80')}/api/media/art`;
+          useDeckStore.getState().setArtBaseUrl(artUrl);
+        } catch {
+          // keep default
+        }
 
         ws.onopen = () => {
           if (!active) return;
@@ -220,6 +266,7 @@ export function useDeckBridge(wsUrl: string = 'ws://127.0.0.1:8765/ws') {
         socketRef.current.close();
         socketRef.current = null;
       }
+      globalSocketSender = null;
     };
   }, [wsUrl]);
 }

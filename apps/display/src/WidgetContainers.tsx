@@ -14,8 +14,19 @@ import {
   PhoneStatusWidget,
   AgentInboxWidget,
   ShortcutGridWidget,
+  NowPlayingLargeWidget,
+  MiniNowPlayingWidget,
+  VinylPlayerWidget,
+  VolumeDialWidget,
+  MediaSourceSwitcherWidget,
 } from '@phone-deck/widgets';
 import { useMetric, useEvents, useDeckStore } from './deckStore';
+import {
+  sendMediaAction,
+  sendMediaSeek,
+  sendMediaVolume,
+  sendMediaSource,
+} from './useDeckBridge';
 
 /**
  * Clock Widget Container (Zero bandwidth, pure local time)
@@ -314,3 +325,147 @@ export const ShortcutGridContainer: React.FC = React.memo(() => {
   );
 });
 ShortcutGridContainer.displayName = 'ShortcutGridContainer';
+
+/**
+ * Now Playing Large Container (Art-forward, zero wire bandwidth position interpolation)
+ */
+export const NowPlayingLargeContainer: React.FC = React.memo(() => {
+  const isPlaying = Boolean(useMetric(FIELD_IDS.MediaPlaying));
+  const title = (useMetric(FIELD_IDS.MediaTitle) as string) || 'No Media Active';
+  const artist = (useMetric(FIELD_IDS.MediaArtist) as string) || 'Unknown Artist';
+  const album = (useMetric(FIELD_IDS.MediaAlbum) as string) || '';
+  const sourceApp = (useMetric(FIELD_IDS.MediaSourceApp) as string) || 'Spotify';
+  const positionSec = Number(useMetric(FIELD_IDS.MediaPositionSec) || 0);
+  const durationSec = Number(useMetric(FIELD_IDS.MediaDurationSec) || 0);
+  const playbackRate = Number(useMetric(FIELD_IDS.MediaPlaybackRate) || 1000);
+  const artId = (useMetric(FIELD_IDS.MediaArtId) as string) || '';
+  const palette = (useMetric(FIELD_IDS.MediaPalette) as string) || '#7C5CFF,#18181B,#00E599';
+  const masterVolume = Number(useMetric(FIELD_IDS.MasterVolumePct) ?? 75);
+  const isMuted = Boolean(useMetric(FIELD_IDS.MasterMute));
+  const artBaseUrl = useDeckStore((s) => s.artBaseUrl);
+
+  return (
+    <NowPlayingLargeWidget
+      title={title}
+      artist={artist}
+      album={album}
+      sourceApp={sourceApp}
+      isPlaying={isPlaying}
+      positionSec={positionSec}
+      durationSec={durationSec}
+      playbackRate={playbackRate}
+      artId={artId}
+      palette={palette}
+      masterVolume={masterVolume}
+      isMuted={isMuted}
+      artBaseUrl={artBaseUrl}
+      onTogglePlay={() => sendMediaAction('toggle')}
+      onNext={() => sendMediaAction('next')}
+      onPrev={() => sendMediaAction('prev')}
+      onSeek={(pos) => sendMediaSeek(pos)}
+      onVolumeChange={(vol) => sendMediaVolume(vol)}
+      onToggleMute={() => sendMediaAction('mute')}
+      onCycleSource={() => sendMediaAction('cycle_source')}
+    />
+  );
+});
+NowPlayingLargeContainer.displayName = 'NowPlayingLargeContainer';
+
+/**
+ * Mini Now Playing Container (Compact 1-row)
+ */
+export const MiniNowPlayingContainer: React.FC = React.memo(() => {
+  const isPlaying = Boolean(useMetric(FIELD_IDS.MediaPlaying));
+  const title = (useMetric(FIELD_IDS.MediaTitle) as string) || 'No Media';
+  const artist = (useMetric(FIELD_IDS.MediaArtist) as string) || '';
+  const artId = (useMetric(FIELD_IDS.MediaArtId) as string) || '';
+  const artBaseUrl = useDeckStore((s) => s.artBaseUrl);
+
+  return (
+    <MiniNowPlayingWidget
+      title={title}
+      artist={artist}
+      isPlaying={isPlaying}
+      artId={artId}
+      artBaseUrl={artBaseUrl}
+      onTogglePlay={() => sendMediaAction('toggle')}
+    />
+  );
+});
+MiniNowPlayingContainer.displayName = 'MiniNowPlayingContainer';
+
+/**
+ * Vinyl Player Container (33 1/3 rpm turntable with tonearm tracking)
+ */
+export const VinylPlayerContainer: React.FC = React.memo(() => {
+  const isPlaying = Boolean(useMetric(FIELD_IDS.MediaPlaying));
+  const title = (useMetric(FIELD_IDS.MediaTitle) as string) || 'No Media';
+  const artist = (useMetric(FIELD_IDS.MediaArtist) as string) || '';
+  const positionSec = Number(useMetric(FIELD_IDS.MediaPositionSec) || 0);
+  const durationSec = Number(useMetric(FIELD_IDS.MediaDurationSec) || 240);
+  const artId = (useMetric(FIELD_IDS.MediaArtId) as string) || '';
+  const artBaseUrl = useDeckStore((s) => s.artBaseUrl);
+
+  return (
+    <VinylPlayerWidget
+      title={title}
+      artist={artist}
+      isPlaying={isPlaying}
+      positionSec={positionSec}
+      durationSec={durationSec}
+      artId={artId}
+      artBaseUrl={artBaseUrl}
+      onTogglePlay={() => sendMediaAction('toggle')}
+    />
+  );
+});
+VinylPlayerContainer.displayName = 'VinylPlayerContainer';
+
+/**
+ * Volume Dial & Fader Container
+ */
+export const VolumeDialContainer: React.FC = React.memo(() => {
+  const masterVolume = Number(useMetric(FIELD_IDS.MasterVolumePct) ?? 75);
+  const isMuted = Boolean(useMetric(FIELD_IDS.MasterMute));
+
+  return (
+    <VolumeDialWidget
+      masterVolume={masterVolume}
+      isMuted={isMuted}
+      onVolumeChange={(vol) => sendMediaVolume(vol)}
+      onToggleMute={() => sendMediaAction('mute')}
+    />
+  );
+});
+VolumeDialContainer.displayName = 'VolumeDialContainer';
+
+/**
+ * Quick Media Source Switcher Container
+ */
+export const MediaSourceSwitcherContainer: React.FC = React.memo(() => {
+  const sourceApp = (useMetric(FIELD_IDS.MediaSourceApp) as string) || 'Spotify';
+  const sessionListRaw = useMetric(FIELD_IDS.MediaSessionList);
+
+  let availableSessions = ['Spotify', 'Opera GX', 'Google Chrome', 'VLC Media Player'];
+  if (typeof sessionListRaw === 'string') {
+    try {
+      const parsed = JSON.parse(sessionListRaw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        availableSessions = parsed;
+      }
+    } catch {
+      // keep fallback
+    }
+  } else if (Array.isArray(sessionListRaw) && sessionListRaw.length > 0) {
+    availableSessions = sessionListRaw as string[];
+  }
+
+  return (
+    <MediaSourceSwitcherWidget
+      sourceApp={sourceApp}
+      availableSessions={availableSessions}
+      onSelectSource={(source) => sendMediaSource(source)}
+    />
+  );
+});
+MediaSourceSwitcherContainer.displayName = 'MediaSourceSwitcherContainer';

@@ -143,3 +143,59 @@ pub fn check_processes_running(process_names: Vec<String>) -> HashMap<String, bo
     let mut sys = sysinfo::System::new();
     ShortcutManager::check_processes_running(&mut sys, &process_names)
 }
+
+#[tauri::command]
+pub fn control_media(
+    state: State<'_, AgentAppState>,
+    action: String,
+    param: Option<String>,
+) -> Result<(), String> {
+    match action.as_str() {
+        "play" => state.media.play(),
+        "pause" => state.media.pause(),
+        "toggle" => state.media.toggle_play_pause(),
+        "next" => state.media.next(),
+        "prev" => state.media.prev(),
+        "seek" => {
+            if let Some(sec_str) = param {
+                if let Ok(sec) = sec_str.parse::<u32>() {
+                    state.media.seek(sec);
+                }
+            }
+        }
+        "volume" => {
+            if let Some(vol_str) = param {
+                if let Ok(vol) = vol_str.parse::<u8>() {
+                    state.media.set_master_volume(vol);
+                }
+            }
+        }
+        "mute" => state.media.toggle_master_mute(),
+        "cycle_source" => state.media.cycle_source(),
+        "set_source" => state.media.set_preferred_source(param),
+        _ => return Err(format!("Unknown media action: {}", action)),
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_media_state(state: State<'_, AgentAppState>) -> Result<serde_json::Value, String> {
+    let snap = state.media.snapshot.read().unwrap();
+    Ok(serde_json::json!({
+        "playing": snap.playing,
+        "status": snap.status,
+        "title": snap.title,
+        "artist": snap.artist,
+        "album": snap.album,
+        "source_app": snap.source_app,
+        "position_sec": snap.position_sec,
+        "duration_sec": snap.duration_sec,
+        "playback_rate": snap.playback_rate,
+        "controls": snap.controls,
+        "art_id": snap.art_id,
+        "palette": snap.palette,
+        "master_volume_pct": snap.master_volume_pct,
+        "master_mute": snap.master_mute,
+        "available_sessions": snap.available_sessions,
+    }))
+}

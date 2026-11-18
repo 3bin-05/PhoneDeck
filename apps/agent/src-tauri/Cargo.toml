@@ -32,8 +32,21 @@ tower = "0.5"
 tower-http = { version = "0.6", features = ["cors"] }
 futures-util = "0.3"
 hex = "0.4"
+ring = "0.17"
 sysinfo = "0.33"
 notify = "6.1"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = [
+    "Media_Control",
+    "Foundation",
+    "Foundation_Collections",
+    "Storage_Streams",
+    "Win32_Media_Audio_Endpoints",
+    "Win32_System_Com",
+    "Win32_Media_Audio",
+] }
+image = { version = "0.25", default-features = false, features = ["webp", "png", "jpeg"] }
 
 [dev-dependencies]
 tokio-tungstenite = "0.26"

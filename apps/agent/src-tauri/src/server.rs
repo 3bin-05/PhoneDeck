@@ -30,6 +30,7 @@ pub struct ServerState {
     pub hub: Arc<crate::hub::AgentHub>,
     pub shortcuts: Arc<crate::shortcuts::ShortcutManager>,
     pub rules: Arc<crate::rules::RulesEngine>,
+    pub media: Arc<crate::media_session::MediaSessionManager>,
     pub agent_id: String,
 }
 
@@ -74,6 +75,17 @@ pub async fn start_wss_server(
                     return StatusCode::FORBIDDEN.into_response();
                 }
                 "OK".into_response()
+            }),
+        )
+        // Public LAN asset endpoint for album art cache
+        .route(
+            "/api/media/art/{art_id}",
+            get(|axum::extract::Path(art_id): axum::extract::Path<String>, State(s): State<ServerState>| async move {
+                if let Some(bytes) = s.media.get_art(&art_id) {
+                    ([(axum::http::header::CONTENT_TYPE, "image/webp")], bytes).into_response()
+                } else {
+                    StatusCode::NOT_FOUND.into_response()
+                }
             }),
         )
         .with_state(state)
@@ -278,6 +290,7 @@ async fn handle_auth_and_stream_socket(mut socket: WebSocket, state: ServerState
 
     let hub_clone = state.telemetry_hub.clone();
     let agent_hub_clone = state.hub.clone();
+    let media_clone = state.media.clone();
     let recv_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = receiver.next().await {
             match msg {
@@ -310,6 +323,23 @@ async fn handle_auth_and_stream_socket(mut socket: WebSocket, state: ServerState
                             let action = act.get("type").and_then(|s| s.as_str()).unwrap_or("");
                             let cwd = act.get("cwd").and_then(|s| s.as_str()).unwrap_or(".");
                             let _ = agent_hub_clone.execute_action(action, cwd);
+                        } else if let Some(media_act) = v.get("media_action").and_then(|a| a.as_str()) {
+                            match media_act {
+                                "play" => media_clone.play(),
+                                "pause" => media_clone.pause(),
+                                "toggle" => media_clone.toggle_play_pause(),
+                                "next" => media_clone.next(),
+                                "prev" => media_clone.prev(),
+                                "cycle_source" => media_clone.cycle_source(),
+                                "mute" => media_clone.toggle_master_mute(),
+                                _ => {}
+                            }
+                        } else if let Some(seek_pos) = v.get("media_seek").and_then(|p| p.as_u64()) {
+                            media_clone.seek(seek_pos as u32);
+                        } else if let Some(vol) = v.get("media_volume").and_then(|p| p.as_u64()) {
+                            media_clone.set_master_volume(vol as u8);
+                        } else if let Some(pref) = v.get("media_source").and_then(|s| s.as_str()) {
+                            media_clone.set_preferred_source(Some(pref.to_string()));
                         }
                     }
                 }

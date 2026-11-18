@@ -40,12 +40,22 @@ pub enum FieldId {
     PcBatteryPct = 15,
     PcBatteryCharging = 16,
 
-    // Media playback (17..21)
+    // Media playback (17..31)
     MediaPlaying = 17,
     MediaTitle = 18,
     MediaArtist = 19,
     MediaPositionSec = 20,
     MediaDurationSec = 21,
+    MediaAlbum = 22,
+    MediaSourceApp = 23,
+    MediaStatus = 24,
+    MediaPlaybackRate = 25,
+    MediaControls = 26,
+    MediaArtId = 27,
+    MediaPalette = 28,
+    MasterVolumePct = 29,
+    MasterMute = 30,
+    MediaSessionList = 31,
 }
 
 impl FieldId {

@@ -8,6 +8,7 @@ export * from './components/HistoryChartWidget';
 export * from './components/SystemWidgets';
 export * from './components/AgentInboxWidget';
 export * from './components/ShortcutGridWidget';
+export * from './components/MediaWidgets';
 
 import {
   DigitalClockWidget,
@@ -28,11 +29,18 @@ import {
 } from './components/SystemWidgets';
 import { AgentInboxWidget } from './components/AgentInboxWidget';
 import { ShortcutGridWidget } from './components/ShortcutGridWidget';
+import {
+  NowPlayingLargeWidget,
+  MiniNowPlayingWidget,
+  VinylPlayerWidget,
+  VolumeDialWidget,
+  MediaSourceSwitcherWidget,
+} from './components/MediaWidgets';
 
 export interface WidgetCatalogEntry {
   id: string;
   name: string;
-  category: 'time' | 'computer' | 'ai' | 'personal' | 'data';
+  category: 'time' | 'computer' | 'ai' | 'personal' | 'data' | 'media';
   defaultSize: { w: number; h: number };
   minSize: { w: number; h: number };
   needs: number[];
@@ -232,5 +240,84 @@ export const WIDGET_REGISTRY: Record<string, (box: WidgetBox, ctx: WidgetContext
           }
         },
       }),
+  }),
+
+  'now-playing-large': (_box, ctx) => ({
+    needs: [17, 18, 19, 20, 21, 22, 23, 27, 28, 29, 30],
+    render: () =>
+      React.createElement(NowPlayingLargeWidget, {
+        isPlaying: (ctx.getMetric(17) as boolean) ?? false,
+        title: (ctx.getMetric(18) as string) || 'No Media Playing',
+        artist: (ctx.getMetric(19) as string) || 'Aphex Twin',
+        positionSec: (ctx.getMetric(20) as number) || 0,
+        durationSec: (ctx.getMetric(21) as number) || 240,
+        album: (ctx.getMetric(22) as string) || '',
+        sourceApp: (ctx.getMetric(23) as string) || 'Spotify',
+        playbackRate: (ctx.getMetric(25) as number) || 1000,
+        artId: (ctx.getMetric(27) as string) || '',
+        palette: (ctx.getMetric(28) as string) || '#7C5CFF,#121217,#00E599',
+        masterVolume: (ctx.getMetric(29) as number) ?? 75,
+        isMuted: (ctx.getMetric(30) as boolean) ?? false,
+        onTogglePlay: () => ctx.sendAction && ctx.sendAction('media_toggle'),
+        onNext: () => ctx.sendAction && ctx.sendAction('media_next'),
+        onPrev: () => ctx.sendAction && ctx.sendAction('media_prev'),
+        onSeek: (pos) => ctx.sendAction && ctx.sendAction('media_seek', { pos }),
+        onVolumeChange: (vol) => ctx.sendAction && ctx.sendAction('media_volume', { vol }),
+        onToggleMute: () => ctx.sendAction && ctx.sendAction('media_mute'),
+        onCycleSource: () => ctx.sendAction && ctx.sendAction('media_cycle_source'),
+      }),
+  }),
+
+  'now-playing-mini': (_box, ctx) => ({
+    needs: [17, 18, 19, 27],
+    render: () =>
+      React.createElement(MiniNowPlayingWidget, {
+        isPlaying: (ctx.getMetric(17) as boolean) ?? false,
+        title: (ctx.getMetric(18) as string) || 'Alberto Balsalm',
+        artist: (ctx.getMetric(19) as string) || 'Aphex Twin',
+        artId: (ctx.getMetric(27) as string) || '',
+        onTogglePlay: () => ctx.sendAction && ctx.sendAction('media_toggle'),
+      }),
+  }),
+
+  'vinyl-player': (_box, ctx) => ({
+    needs: [17, 18, 19, 20, 21, 27],
+    render: () =>
+      React.createElement(VinylPlayerWidget, {
+        isPlaying: (ctx.getMetric(17) as boolean) ?? false,
+        title: (ctx.getMetric(18) as string) || 'Selected Ambient Works',
+        artist: (ctx.getMetric(19) as string) || 'Aphex Twin',
+        positionSec: (ctx.getMetric(20) as number) || 0,
+        durationSec: (ctx.getMetric(21) as number) || 240,
+        artId: (ctx.getMetric(27) as string) || '',
+        onTogglePlay: () => ctx.sendAction && ctx.sendAction('media_toggle'),
+      }),
+  }),
+
+  'volume-dial': (_box, ctx) => ({
+    needs: [29, 30],
+    render: () =>
+      React.createElement(VolumeDialWidget, {
+        masterVolume: (ctx.getMetric(29) as number) ?? 75,
+        isMuted: (ctx.getMetric(30) as boolean) ?? false,
+        onVolumeChange: (vol) => ctx.sendAction && ctx.sendAction('media_volume', { vol }),
+        onToggleMute: () => ctx.sendAction && ctx.sendAction('media_mute'),
+      }),
+  }),
+
+  'media-source-switcher': (_box, ctx) => ({
+    needs: [23, 31],
+    render: () => {
+      let sessions = ['Spotify', 'Opera GX', 'Google Chrome', 'VLC Media Player'];
+      const rawSessions = ctx.getMetric(31);
+      if (typeof rawSessions === 'string') {
+        try { sessions = JSON.parse(rawSessions); } catch {}
+      }
+      return React.createElement(MediaSourceSwitcherWidget, {
+        sourceApp: (ctx.getMetric(23) as string) || 'Spotify',
+        availableSessions: sessions,
+        onSelectSource: (app) => ctx.sendAction && ctx.sendAction('media_source', { app }),
+      });
+    },
   }),
 };

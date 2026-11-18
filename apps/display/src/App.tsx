@@ -28,15 +28,17 @@ import {
   BUILTIN_WALLPAPERS,
   DEFAULT_WALLPAPER,
 } from '@phone-deck/wallpaper';
-import { useDeckBridge } from './useDeckBridge';
+import {
+  useDeckBridge,
+  sendMediaAction,
+  sendMediaVolume,
+} from './useDeckBridge';
 import { ApprovalDialog } from './ApprovalDialog';
 import {
   DigitalClockContainer,
-  AnalogClockContainer,
   CpuGaugeContainer,
   CpuTileContainer,
   RamTileContainer,
-  GpuTileContainer,
   CpuHistoryContainer,
   MemoryDisksContainer,
   NetworkIoContainer,
@@ -45,6 +47,11 @@ import {
   PhoneStatusContainer,
   AgentInboxContainer,
   ShortcutGridContainer,
+  NowPlayingLargeContainer,
+  MiniNowPlayingContainer,
+  VinylPlayerContainer,
+  VolumeDialContainer,
+  MediaSourceSwitcherContainer,
 } from './WidgetContainers';
 
 interface ConnectionStatus {
@@ -458,30 +465,30 @@ export default function App() {
               }}
               className="w-full h-full grid grid-cols-12 grid-rows-6 gap-2"
             >
-              {/* PAGE 3: AMBIENT & MEDIA */}
-              {/* Minimal Analog Clock (col 1..4, row 1..6) */}
+              {/* PAGE 3: MEDIA & TURNTABLE */}
+              {/* Spinning Vinyl Turntable (col 1..4, row 1..6) */}
               <div className="col-span-4 row-span-6">
-                <AnalogClockContainer />
+                <VinylPlayerContainer />
               </div>
 
-              {/* GPU Tile (col 5..8, row 1..3) */}
-              <div className="col-span-4 row-span-3">
-                <GpuTileContainer />
+              {/* Now Playing Large (col 5..9, row 1..4) */}
+              <div className="col-span-5 row-span-4">
+                <NowPlayingLargeContainer />
               </div>
 
-              {/* Phone Status (col 9..12, row 1..3) */}
-              <div className="col-span-4 row-span-3">
-                <PhoneStatusContainer />
+              {/* Mini Now Playing (col 5..9, row 5..6) */}
+              <div className="col-span-5 row-span-2">
+                <MiniNowPlayingContainer />
               </div>
 
-              {/* Network Throughput (col 5..8, row 4..6) */}
-              <div className="col-span-4 row-span-3">
-                <NetworkIoContainer />
+              {/* Master Volume Dial & Fader (col 10..12, row 1..3) */}
+              <div className="col-span-3 row-span-3">
+                <VolumeDialContainer />
               </div>
 
-              {/* System Uptime (col 9..12, row 4..6) */}
-              <div className="col-span-4 row-span-3">
-                <SystemUptimeContainer />
+              {/* Quick Source Switcher (col 10..12, row 4..6) */}
+              <div className="col-span-3 row-span-3">
+                <MediaSourceSwitcherContainer />
               </div>
             </motion.div>
           )}
@@ -680,6 +687,67 @@ export default function App() {
                 >
                   2× Tap (Lock)
                 </button>
+              </div>
+            </div>
+
+            {/* Part B: Media Session Dev Controls */}
+            <div className="pt-2 border-t border-white/[0.08] space-y-2">
+              <div className="flex justify-between items-center text-[10px] uppercase font-semibold text-[#00E599]">
+                <span>Media Session Debug</span>
+                <span className="text-zinc-400 font-mono">
+                  {String(metrics[23] || 'Spotify')}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-4 gap-1">
+                <button
+                  onClick={() => sendMediaAction('prev')}
+                  className="px-2 py-1 bg-white/[0.04] hover:bg-white/[0.08] text-white rounded text-[10px] font-mono cursor-pointer"
+                >
+                  ⏮ Prev
+                </button>
+                <button
+                  onClick={() => sendMediaAction('toggle')}
+                  className="col-span-2 px-2 py-1 bg-[#00E599]/20 hover:bg-[#00E599]/30 text-[#00E599] rounded text-[10px] font-mono font-semibold cursor-pointer"
+                >
+                  ⏯ Play/Pause
+                </button>
+                <button
+                  onClick={() => sendMediaAction('next')}
+                  className="px-2 py-1 bg-white/[0.04] hover:bg-white/[0.08] text-white rounded text-[10px] font-mono cursor-pointer"
+                >
+                  Next ⏭
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  onClick={() => sendMediaAction('cycle_source')}
+                  className="px-2 py-1 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 rounded text-[10px] font-mono cursor-pointer"
+                >
+                  🔄 Cycle App
+                </button>
+                <button
+                  onClick={() => sendMediaAction('mute')}
+                  className="px-2 py-1 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 rounded text-[10px] font-mono cursor-pointer"
+                >
+                  🔇 Mute/Unmute
+                </button>
+              </div>
+
+              <div>
+                <div className="flex justify-between text-[9px] text-[#71717A] mb-1">
+                  <span>Master Vol Slider</span>
+                  <span className="text-white font-mono">{Number(metrics[29] ?? 75)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={Number(metrics[29] ?? 75)}
+                  onChange={(e) => sendMediaVolume(parseInt(e.target.value))}
+                  className="w-full accent-[#00E599] h-1.5 bg-white/[0.08] rounded cursor-pointer"
+                />
               </div>
             </div>
           </div>

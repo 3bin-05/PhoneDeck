@@ -113,6 +113,46 @@
       "defaultSize": { "w": 6, "h": 3 },
       "minSize": { "w": 4, "h": 2 },
       "needs": []
+    },
+    {
+      "id": "now-playing-large",
+      "name": "Now Playing (Large)",
+      "category": "media",
+      "defaultSize": { "w": 6, "h": 3 },
+      "minSize": { "w": 4, "h": 2 },
+      "needs": [17, 18, 19, 20, 21, 22, 23, 27, 28, 29]
+    },
+    {
+      "id": "now-playing-mini",
+      "name": "Mini Now Playing",
+      "category": "media",
+      "defaultSize": { "w": 6, "h": 1 },
+      "minSize": { "w": 3, "h": 1 },
+      "needs": [17, 18, 19, 27]
+    },
+    {
+      "id": "vinyl-player",
+      "name": "Vinyl Player",
+      "category": "media",
+      "defaultSize": { "w": 4, "h": 4 },
+      "minSize": { "w": 3, "h": 3 },
+      "needs": [17, 18, 19, 20, 21, 27]
+    },
+    {
+      "id": "volume-dial",
+      "name": "Master Volume & Fader",
+      "category": "media",
+      "defaultSize": { "w": 3, "h": 3 },
+      "minSize": { "w": 2, "h": 2 },
+      "needs": [29, 30]
+    },
+    {
+      "id": "media-source-switcher",
+      "name": "Quick Source Switcher",
+      "category": "media",
+      "defaultSize": { "w": 4, "h": 2 },
+      "minSize": { "w": 3, "h": 2 },
+      "needs": [23, 31]
     }
   ]
 }

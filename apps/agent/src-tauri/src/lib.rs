@@ -3,6 +3,7 @@ pub mod commands;
 pub mod discovery;
 pub mod git_stats;
 pub mod hub;
+pub mod media_session;
 pub mod net;
 pub mod pairing;
 pub mod rules;
@@ -40,6 +41,7 @@ pub struct AgentAppState {
     pub storage_dir: PathBuf,
     pub shortcuts: Arc<ShortcutManager>,
     pub rules: Arc<RulesEngine>,
+    pub media: Arc<media_session::MediaSessionManager>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -84,6 +86,7 @@ pub fn run() {
             // Initialize Shortcuts & Rules Engines
             let shortcuts = Arc::new(ShortcutManager::new());
             let rules = Arc::new(RulesEngine::new());
+            let media = media_session::MediaSessionManager::new(telemetry_hub.clone());
 
             // Forward hub events into rules engine
             let mut event_sub = hub.event_tx.subscribe();
@@ -115,6 +118,7 @@ pub fn run() {
                 storage_dir,
                 shortcuts: shortcuts.clone(),
                 rules: rules.clone(),
+                media: media.clone(),
             };
 
             // Start LAN-only WSS server (axum + rustls)
@@ -124,6 +128,7 @@ pub fn run() {
                 hub,
                 shortcuts,
                 rules,
+                media,
                 agent_id: agent_id.clone(),
             };
             let tls_acceptor = TlsAcceptor::from(tls_mgr.server_config.clone());
@@ -166,7 +171,9 @@ pub fn run() {
             commands::get_rules,
             commands::save_rules,
             commands::test_rule,
-            commands::check_processes_running
+            commands::check_processes_running,
+            commands::control_media,
+            commands::get_media_state
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

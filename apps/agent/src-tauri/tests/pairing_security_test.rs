@@ -125,12 +125,14 @@ async fn test_pairing_tls_challenge_response_and_revocation() {
     let bind_addr = SocketAddr::from(([127, 0, 0, 1], port));
 
     let (telemetry_hub, _) = agent_lib::sensors::TelemetryHub::new();
+    let telemetry_hub = Arc::new(telemetry_hub);
     let server_state = ServerState {
         pairing: pairing_mgr.clone(),
-        telemetry_hub: Arc::new(telemetry_hub),
+        telemetry_hub: telemetry_hub.clone(),
         hub: Arc::new(agent_lib::hub::AgentHub::new()),
         shortcuts: Arc::new(agent_lib::shortcuts::ShortcutManager::new()),
         rules: Arc::new(agent_lib::rules::RulesEngine::new()),
+        media: agent_lib::media_session::MediaSessionManager::new(telemetry_hub.clone()),
         agent_id: agent_id.clone(),
     };
     let tls_acceptor = TlsAcceptor::from(tls_mgr.server_config.clone());

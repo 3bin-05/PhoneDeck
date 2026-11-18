@@ -4,4 +4,4 @@
  * Integer field-ID dictionary per plan.md section 4 & 10.
  * Eliminates string keys on the wire for featherweight bandwidth.
  */
-export type FieldId = "CpuTotal" | "CpuFreqMhz" | "CpuTempC" | "RamUsedBytes" | "RamTotalBytes" | "GpuUsage" | "GpuVramUsedBytes" | "GpuVramTotalBytes" | "GpuTempC" | "NetInBytesSec" | "NetOutBytesSec" | "DiskUsedBytes" | "DiskTotalBytes" | "UptimeSeconds" | "PcBatteryPct" | "PcBatteryCharging" | "MediaPlaying" | "MediaTitle" | "MediaArtist" | "MediaPositionSec" | "MediaDurationSec";
+export type FieldId = "CpuTotal" | "CpuFreqMhz" | "CpuTempC" | "RamUsedBytes" | "RamTotalBytes" | "GpuUsage" | "GpuVramUsedBytes" | "GpuVramTotalBytes" | "GpuTempC" | "NetInBytesSec" | "NetOutBytesSec" | "DiskUsedBytes" | "DiskTotalBytes" | "UptimeSeconds" | "PcBatteryPct" | "PcBatteryCharging" | "MediaPlaying" | "MediaTitle" | "MediaArtist" | "MediaPositionSec" | "MediaDurationSec" | "MediaAlbum" | "MediaSourceApp" | "MediaStatus" | "MediaPlaybackRate" | "MediaControls" | "MediaArtId" | "MediaPalette" | "MasterVolumePct" | "MasterMute" | "MediaSessionList";

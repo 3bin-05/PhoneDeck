@@ -22,7 +22,17 @@ export type FieldId =
   | "MediaTitle"
   | "MediaArtist"
   | "MediaPositionSec"
-  | "MediaDurationSec";
+  | "MediaDurationSec"
+  | "MediaAlbum"
+  | "MediaSourceApp"
+  | "MediaStatus"
+  | "MediaPlaybackRate"
+  | "MediaControls"
+  | "MediaArtId"
+  | "MediaPalette"
+  | "MasterVolumePct"
+  | "MasterMute"
+  | "MediaSessionList";
 
 export const FIELD_IDS = {
   CpuTotal: 1,
@@ -46,6 +56,16 @@ export const FIELD_IDS = {
   MediaArtist: 19,
   MediaPositionSec: 20,
   MediaDurationSec: 21,
+  MediaAlbum: 22,
+  MediaSourceApp: 23,
+  MediaStatus: 24,
+  MediaPlaybackRate: 25,
+  MediaControls: 26,
+  MediaArtId: 27,
+  MediaPalette: 28,
+  MasterVolumePct: 29,
+  MasterMute: 30,
+  MediaSessionList: 31,
 } as const;
 
 export type MetricValue = null | number | boolean | string;
