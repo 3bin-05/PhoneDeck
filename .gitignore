@@ -9,9 +9,22 @@ node_modules/
 dist/
 dist-ssr/
 
-# Tauri
+# Tauri Desktop
 apps/**/src-tauri/target/
-apps/**/gen/
+
+# Tauri Android transient build artifacts
+**/gen/android/.gradle/
+**/gen/android/.kotlin/
+**/gen/android/build/
+**/gen/android/app/build/
+**/gen/android/buildSrc/build/
+**/gen/android/.cxx/
+**/gen/android/**/.cxx/
+**/gen/android/tauri.settings.gradle
+**/gen/android/**/local.properties
+**/gen/android/**/key.properties
+**/gen/android/**/keystore.properties
+**/gen/android/**/jniLibs/
 
 # Logs & temp
 *.log

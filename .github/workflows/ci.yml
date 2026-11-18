@@ -104,9 +104,13 @@ jobs:
 
       - name: Setup Android SDK Platform & NDK
         run: |
-          ANDROID_SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          ANDROID_SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$ANDROID_SDK" >> $GITHUB_ENV
           yes | $ANDROID_SDK/cmdline-tools/latest/bin/sdkmanager --licenses || true
           $ANDROID_SDK/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;26.1.10909125"
+          NDK_PATH="$ANDROID_SDK/ndk/26.1.10909125"
+          echo "NDK_HOME=$NDK_PATH" >> $GITHUB_ENV
+          echo "$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
 
       - name: Install pnpm
         uses: pnpm/action-setup@v3
@@ -128,8 +132,6 @@ jobs:
       - name: Build Android Release APK
         run: |
           pnpm --filter @phone-deck/display tauri android build --apk
-        env:
-          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/26.1.10909125
 
       - name: Upload Signed APK
         uses: actions/upload-artifact@v4
