@@ -7,40 +7,104 @@
       "name": "Digital Clock",
       "category": "time",
       "defaultSize": { "w": 4, "h": 2 },
-      "minSize": { "w": 2, "h": 1 },
+      "minSize": { "w": 3, "h": 1 },
       "needs": []
     },
     {
-      "id": "cpu-metric",
+      "id": "clock-analog",
+      "name": "Minimal Analog Clock",
+      "category": "time",
+      "defaultSize": { "w": 3, "h": 3 },
+      "minSize": { "w": 2, "h": 2 },
+      "needs": []
+    },
+    {
+      "id": "clock-flip",
+      "name": "Flip Numerals Clock",
+      "category": "time",
+      "defaultSize": { "w": 4, "h": 2 },
+      "minSize": { "w": 3, "h": 2 },
+      "needs": []
+    },
+    {
+      "id": "metric-cpu",
       "name": "CPU Usage",
       "category": "computer",
       "defaultSize": { "w": 3, "h": 2 },
       "minSize": { "w": 2, "h": 2 },
-      "needs": ["cpu_total", "cpu_freq", "cpu_temp"]
+      "needs": [1, 2, 3]
     },
     {
-      "id": "ram-metric",
-      "name": "Memory Stats",
+      "id": "metric-ram",
+      "name": "Memory RAM",
       "category": "computer",
       "defaultSize": { "w": 3, "h": 2 },
       "minSize": { "w": 2, "h": 2 },
-      "needs": ["ram_used", "ram_total"]
+      "needs": [4, 5]
     },
     {
-      "id": "gpu-metric",
-      "name": "GPU Stats",
+      "id": "gauge-radial",
+      "name": "Smooth Radial Gauge",
+      "category": "computer",
+      "defaultSize": { "w": 3, "h": 3 },
+      "minSize": { "w": 2, "h": 2 },
+      "needs": [1]
+    },
+    {
+      "id": "chart-history",
+      "name": "Canvas History Chart",
+      "category": "computer",
+      "defaultSize": { "w": 6, "h": 3 },
+      "minSize": { "w": 4, "h": 2 },
+      "needs": [1]
+    },
+    {
+      "id": "memory-disks",
+      "name": "Storage & Memory",
+      "category": "computer",
+      "defaultSize": { "w": 6, "h": 2 },
+      "minSize": { "w": 4, "h": 2 },
+      "needs": [4, 5, 12, 13]
+    },
+    {
+      "id": "network-io",
+      "name": "Network Throughput",
       "category": "computer",
       "defaultSize": { "w": 3, "h": 2 },
       "minSize": { "w": 2, "h": 2 },
-      "needs": ["gpu_usage", "gpu_vram", "gpu_temp"]
+      "needs": [10, 11]
+    },
+    {
+      "id": "top-processes",
+      "name": "Top Processes",
+      "category": "computer",
+      "defaultSize": { "w": 6, "h": 3 },
+      "minSize": { "w": 4, "h": 2 },
+      "needs": [1]
+    },
+    {
+      "id": "system-uptime",
+      "name": "System Uptime",
+      "category": "computer",
+      "defaultSize": { "w": 3, "h": 2 },
+      "minSize": { "w": 2, "h": 1 },
+      "needs": [14]
+    },
+    {
+      "id": "phone-status",
+      "name": "Phone Battery & Thermals",
+      "category": "personal",
+      "defaultSize": { "w": 3, "h": 2 },
+      "minSize": { "w": 2, "h": 1 },
+      "needs": [15, 16]
     },
     {
       "id": "agent-inbox",
-      "name": "Agent Review Inbox",
+      "name": "AI Agent Inbox",
       "category": "ai",
       "defaultSize": { "w": 6, "h": 3 },
       "minSize": { "w": 4, "h": 2 },
-      "needs": ["agent_events"]
+      "needs": []
     }
   ]
 }
