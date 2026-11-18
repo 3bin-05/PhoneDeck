@@ -2,12 +2,14 @@ pub mod commands;
 pub mod discovery;
 pub mod net;
 pub mod pairing;
+pub mod sensors;
 pub mod server;
 pub mod tls;
 
 use discovery::MdnsAdvertiser;
 use net::get_lan_ips;
 use pairing::PairingManager;
+use sensors::{spawn_sampler_thread, TelemetryHub};
 use server::{start_wss_server, ServerState};
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -57,6 +59,11 @@ pub fn run() {
             let pairing_mgr = Arc::new(PairingManager::new(&storage_dir));
             let agent_id = "phone-deck-pc".to_string();
 
+            // Initialize TelemetryHub & spawn adaptive sampler thread
+            let (telemetry_hub, _rx) = TelemetryHub::new();
+            let telemetry_hub = Arc::new(telemetry_hub);
+            spawn_sampler_thread(telemetry_hub.clone());
+
             let app_state = AgentAppState {
                 agent_id: agent_id.clone(),
                 fingerprint: tls_mgr.fingerprint.clone(),
@@ -69,6 +76,7 @@ pub fn run() {
             // Start LAN-only WSS server (axum + rustls)
             let server_state = ServerState {
                 pairing: pairing_mgr,
+                telemetry_hub,
                 agent_id: agent_id.clone(),
             };
             let tls_acceptor = TlsAcceptor::from(tls_mgr.server_config.clone());

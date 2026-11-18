@@ -8,6 +8,9 @@ pub mod delta;
 pub mod envelope;
 pub mod events;
 pub mod fields;
+pub mod lttb;
+
+pub use lttb::{lttb_downsample, DataPoint};
 
 pub use crypto::{
     compute_cert_fingerprint, create_auth_proof, derive_client_key, derive_stored_key,

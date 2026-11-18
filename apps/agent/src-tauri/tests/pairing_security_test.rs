@@ -124,8 +124,10 @@ async fn test_pairing_tls_challenge_response_and_revocation() {
     let port: u16 = 18766;
     let bind_addr = SocketAddr::from(([127, 0, 0, 1], port));
 
+    let (telemetry_hub, _) = agent_lib::sensors::TelemetryHub::new();
     let server_state = ServerState {
         pairing: pairing_mgr.clone(),
+        telemetry_hub: Arc::new(telemetry_hub),
         agent_id: agent_id.clone(),
     };
     let tls_acceptor = TlsAcceptor::from(tls_mgr.server_config.clone());

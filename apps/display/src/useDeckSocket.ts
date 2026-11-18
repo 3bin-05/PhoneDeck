@@ -42,10 +42,13 @@ export function useDeckSocket(wsUrl: string = 'ws://127.0.0.1:8765/ws') {
   const [telemetry, setTelemetry] = useState<TelemetryData>(DEFAULT_TELEMETRY);
   const [latestEvent, setLatestEvent] = useState<AgentEvent | null>(null);
   const [bytesPerSec, setBytesPerSec] = useState<number>(0);
+  const [telemetryBytesPerSec, setTelemetryBytesPerSec] = useState<number>(0);
+  const [eventsBytesPerSec, setEventsBytesPerSec] = useState<number>(0);
+  const [tickRateHz, setTickRateHz] = useState<number>(2.0);
   const [packetCount, setPacketCount] = useState<number>(0);
 
   const rawStateRef = useRef<Record<number, any>>({});
-  const bytesWindowRef = useRef<{ bytes: number; timestamp: number }[]>([]);
+  const bytesWindowRef = useRef<{ bytes: number; timestamp: number; channel: number }[]>([]);
   const socketRef = useRef<WebSocket | null>(null);
 
   const handleMessage = useCallback((data: ArrayBuffer) => {
@@ -55,13 +58,25 @@ export function useDeckSocket(wsUrl: string = 'ws://127.0.0.1:8765/ws') {
 
       const [channel, , payload] = decoded;
 
-      // Track throughput
+      // Track throughput & channels
       const now = performance.now();
-      bytesWindowRef.current.push({ bytes: data.byteLength, timestamp: now });
+      bytesWindowRef.current.push({ bytes: data.byteLength, timestamp: now, channel });
       // Keep trailing 1000ms window
       bytesWindowRef.current = bytesWindowRef.current.filter((entry) => now - entry.timestamp <= 1000);
+
       const totalBytes = bytesWindowRef.current.reduce((acc, entry) => acc + entry.bytes, 0);
+      const telBytes = bytesWindowRef.current
+        .filter((e) => e.channel === 1)
+        .reduce((acc, entry) => acc + entry.bytes, 0);
+      const evtBytes = bytesWindowRef.current
+        .filter((e) => e.channel === 2)
+        .reduce((acc, entry) => acc + entry.bytes, 0);
+      const telPackets = bytesWindowRef.current.filter((e) => e.channel === 1).length;
+
       setBytesPerSec(totalBytes);
+      setTelemetryBytesPerSec(telBytes);
+      setEventsBytesPerSec(evtBytes);
+      setTickRateHz(telPackets);
       setPacketCount((c) => c + 1);
 
       // Channel 1 = Telemetry (lossy, latest-wins, delta-encoded)
@@ -213,6 +228,9 @@ export function useDeckSocket(wsUrl: string = 'ws://127.0.0.1:8765/ws') {
     telemetry,
     latestEvent,
     bytesPerSec,
+    telemetryBytesPerSec,
+    eventsBytesPerSec,
+    tickRateHz,
     packetCount,
   };
 }

@@ -1,4 +1,5 @@
 use crate::pairing::PairingManager;
+use crate::sensors::TelemetryHub;
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
@@ -16,6 +17,7 @@ use protocol::{
     generate_nonce, AuthChallenge, AuthResponse, AuthResult, PairRequest, PairResponse,
 };
 use std::net::SocketAddr;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio_rustls::TlsAcceptor;
@@ -24,6 +26,7 @@ use tower_http::cors::CorsLayer;
 #[derive(Clone)]
 pub struct ServerState {
     pub pairing: Arc<PairingManager>,
+    pub telemetry_hub: Arc<TelemetryHub>,
     pub agent_id: String,
 }
 
@@ -53,7 +56,7 @@ pub async fn start_wss_server(
         )
         // Localhost protected webhook / push endpoints
         .route(
-            "/api/push/:key",
+            "/api/push/{key}",
             post(|headers: HeaderMap| async move {
                 if !verify_localhost_headers(&headers) {
                     return StatusCode::FORBIDDEN.into_response();
@@ -237,10 +240,64 @@ async fn handle_auth_and_stream_socket(mut socket: WebSocket, state: ServerState
         return;
     }
 
-    // Now keep socket open for live telemetry/events
-    while let Some(Ok(msg)) = socket.next().await {
-        if let Message::Close(_) = msg {
-            break;
+    // Client authenticated: Register with TelemetryHub
+    state.telemetry_hub.add_client();
+    // Default subscription on connect: CPU, Frequency, RAM used/total, Network in/out, Uptime
+    state
+        .telemetry_hub
+        .update_client_subscriptions(vec![1, 2, 4, 5, 10, 11, 14])
+        .await;
+
+    let (mut sender, mut receiver) = socket.split();
+    let mut rx = state.telemetry_hub.telemetry_tx.subscribe();
+
+    let send_task = tokio::spawn(async move {
+        while let Ok(bytes) = rx.recv().await {
+            if sender.send(Message::Binary(bytes.into())).await.is_err() {
+                break;
+            }
         }
+    });
+
+    let hub_clone = state.telemetry_hub.clone();
+    let recv_task = tokio::spawn(async move {
+        while let Some(Ok(msg)) = receiver.next().await {
+            match msg {
+                Message::Text(text) => {
+                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
+                        if let Some(dimmed) = v.get("dimmed").and_then(|d| d.as_bool()) {
+                            if dimmed {
+                                // Dimmed / night mode: poll only Uptime (< 0.2 KB/s)
+                                hub_clone.update_client_subscriptions(vec![14]).await;
+                            } else {
+                                // Active page: standard metrics
+                                hub_clone
+                                    .update_client_subscriptions(vec![1, 2, 4, 5, 10, 11, 14])
+                                    .await;
+                            }
+                        } else if let Some(subs) = v.get("subscribe").and_then(|s| s.as_array()) {
+                            let list = subs
+                                .iter()
+                                .filter_map(|x| x.as_u64().map(|n| n as u16))
+                                .collect::<Vec<_>>();
+                            hub_clone.update_client_subscriptions(list).await;
+                        }
+                    }
+                }
+                Message::Close(_) => break,
+                _ => {}
+            }
+        }
+    });
+
+    tokio::select! {
+        _ = send_task => {},
+        _ = recv_task => {},
     }
+
+    state.telemetry_hub.remove_client();
+    log::info!(
+        "[WSS/Auth] Client disconnected. Active clients: {}",
+        state.telemetry_hub.client_count.load(Ordering::SeqCst)
+    );
 }
