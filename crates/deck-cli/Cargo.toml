@@ -6,6 +6,8 @@ description = "phonedeck CLI bridge for notifications, asks, and webhooks"
 
 [dependencies]
 protocol = { path = "../protocol" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 
 [[bin]]
 name = "phonedeck"

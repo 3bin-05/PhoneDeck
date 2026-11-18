@@ -1,0 +1,22 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "powershell.exe -ExecutionPolicy Bypass -File \"D:/PhoneDeck/integrations/claude-code/stop.ps1\""
+      }
+    ],
+    "Notification": [
+      {
+        "type": "command",
+        "command": "phonedeck notify --agent claude-code --kind needs_input --title \"Claude needs input\""
+      }
+    ],
+    "PreToolUse": [
+      {
+        "type": "command",
+        "command": "powershell.exe -ExecutionPolicy Bypass -File \"D:/PhoneDeck/integrations/claude-code/pre-tool-use.ps1\""
+      }
+    ]
+  }
+}

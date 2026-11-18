@@ -14,7 +14,7 @@ import {
   PhoneStatusWidget,
   AgentInboxWidget,
 } from '@phone-deck/widgets';
-import { useMetric, useEvents } from './deckStore';
+import { useMetric, useEvents, useDeckStore } from './deckStore';
 
 /**
  * Clock Widget Container (Zero bandwidth, pure local time)
@@ -236,6 +236,27 @@ PhoneStatusContainer.displayName = 'PhoneStatusContainer';
 export const AgentInboxContainer: React.FC = React.memo(() => {
   const events = useEvents();
 
+  const handleOpenEditor = (id: string) => {
+    const evt = events.find((e) => e.id === id);
+    const cwd = evt?.cwd || '.';
+    fetch('http://127.0.0.1:8767/api/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'open_editor', cwd }),
+    }).catch(() => {
+      // In browser simulation or fallback, open local editor
+      console.log('Action open_editor requested for', cwd);
+    });
+  };
+
+  const handleMarkReviewed = (id: string) => {
+    useDeckStore.getState().removeEvent(id);
+  };
+
+  const handleDismiss = (id: string) => {
+    useDeckStore.getState().removeEvent(id);
+  };
+
   const formattedEvents = events.map((e) => {
     const status: 'done' | 'needs_input' | 'error' =
       e.kind === 'needs_input'
@@ -257,6 +278,13 @@ export const AgentInboxContainer: React.FC = React.memo(() => {
     };
   });
 
-  return <AgentInboxWidget events={formattedEvents} />;
+  return (
+    <AgentInboxWidget
+      events={formattedEvents}
+      onOpenInEditor={handleOpenEditor}
+      onMarkReviewed={handleMarkReviewed}
+      onDismiss={handleDismiss}
+    />
+  );
 });
 AgentInboxContainer.displayName = 'AgentInboxContainer';

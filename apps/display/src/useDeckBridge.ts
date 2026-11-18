@@ -129,7 +129,28 @@ export function useDeckBridge(wsUrl: string = 'ws://127.0.0.1:8765/ws') {
 
             // Channel 2: Events (reliable, add directly)
             if (channel === 2 && payload) {
-              useDeckStore.getState().addEvent(payload as AgentEvent);
+              const agentEvt = payload as AgentEvent;
+              useDeckStore.getState().addEvent(agentEvt);
+
+              // Wake dimmed screen for tasks/approvals per plan.md section 6.4
+              if (useDeckStore.getState().isDimmed) {
+                useDeckStore.getState().setDimmed(false);
+              }
+
+              // Trigger distinct vibration patterns per event kind
+              if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+                try {
+                  if (agentEvt.kind === 'approval') {
+                    navigator.vibrate([200, 100, 200, 100, 200]);
+                  } else if (agentEvt.kind === 'done') {
+                    navigator.vibrate([100, 50, 100]);
+                  } else if (agentEvt.kind === 'error') {
+                    navigator.vibrate([300, 100, 300]);
+                  }
+                } catch {
+                  // Ignore vibration errors if not supported or disabled
+                }
+              }
             }
           } catch (err) {
             console.error('Failed to decode packet:', err);

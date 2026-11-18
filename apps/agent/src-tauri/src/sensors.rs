@@ -86,6 +86,16 @@ impl TelemetryHub {
         self.client_count.fetch_sub(1, Ordering::SeqCst);
         self.park_notifier.notify_waiters();
     }
+
+    pub fn push_custom_metric(&self, field_id: u16, val: protocol::MetricValue) {
+        let mut updates = std::collections::BTreeMap::new();
+        updates.insert(field_id, val);
+        let delta = protocol::TelemetryDelta { updates };
+        let envelope = protocol::Envelope::telemetry(0, delta);
+        if let Ok(bytes) = protocol::to_msgpack(&envelope) {
+            let _ = self.telemetry_tx.send(bytes);
+        }
+    }
 }
 
 /// Spawns the high-performance, budget-compliant sampler loop.

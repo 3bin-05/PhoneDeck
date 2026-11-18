@@ -1,12 +1,18 @@
+pub mod bridge;
 pub mod commands;
 pub mod discovery;
+pub mod git_stats;
+pub mod hub;
 pub mod net;
 pub mod pairing;
 pub mod sensors;
 pub mod server;
 pub mod tls;
+pub mod watcher;
 
+use bridge::{start_http_bridge, BridgeState};
 use discovery::MdnsAdvertiser;
+use hub::AgentHub;
 use net::get_lan_ips;
 use pairing::PairingManager;
 use sensors::{spawn_sampler_thread, TelemetryHub};
@@ -17,6 +23,7 @@ use std::sync::Arc;
 use tauri::Manager;
 use tls::TlsManager;
 use tokio_rustls::TlsAcceptor;
+use watcher::spawn_session_watcher;
 
 pub const AGENT_PORT: u16 = 8766;
 
@@ -64,6 +71,20 @@ pub fn run() {
             let telemetry_hub = Arc::new(telemetry_hub);
             spawn_sampler_thread(telemetry_hub.clone());
 
+            // Initialize AI Agent Hub & local HTTP bridge
+            let hub = Arc::new(AgentHub::new());
+            spawn_session_watcher(hub.clone());
+
+            let bridge_state = BridgeState {
+                hub: hub.clone(),
+                telemetry_hub: telemetry_hub.clone(),
+            };
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = start_http_bridge(bridge_state).await {
+                    log::error!("[Agent] Local HTTP bridge error: {}", e);
+                }
+            });
+
             let app_state = AgentAppState {
                 agent_id: agent_id.clone(),
                 fingerprint: tls_mgr.fingerprint.clone(),
@@ -77,6 +98,7 @@ pub fn run() {
             let server_state = ServerState {
                 pairing: pairing_mgr,
                 telemetry_hub,
+                hub,
                 agent_id: agent_id.clone(),
             };
             let tls_acceptor = TlsAcceptor::from(tls_mgr.server_config.clone());

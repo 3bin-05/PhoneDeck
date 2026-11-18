@@ -27,6 +27,7 @@ use tower_http::cors::CorsLayer;
 pub struct ServerState {
     pub pairing: Arc<PairingManager>,
     pub telemetry_hub: Arc<TelemetryHub>,
+    pub hub: Arc<crate::hub::AgentHub>,
     pub agent_id: String,
 }
 
@@ -250,16 +251,31 @@ async fn handle_auth_and_stream_socket(mut socket: WebSocket, state: ServerState
 
     let (mut sender, mut receiver) = socket.split();
     let mut rx = state.telemetry_hub.telemetry_tx.subscribe();
+    let mut event_rx = state.hub.event_tx.subscribe();
 
     let send_task = tokio::spawn(async move {
-        while let Ok(bytes) = rx.recv().await {
-            if sender.send(Message::Binary(bytes.into())).await.is_err() {
-                break;
+        loop {
+            tokio::select! {
+                Ok(bytes) = rx.recv() => {
+                    if sender.send(Message::Binary(bytes.into())).await.is_err() {
+                        break;
+                    }
+                }
+                Ok(event) = event_rx.recv() => {
+                    let envelope = protocol::Envelope::event(0, event);
+                    if let Ok(bytes) = protocol::to_msgpack(&envelope) {
+                        if sender.send(Message::Binary(bytes.into())).await.is_err() {
+                            break;
+                        }
+                    }
+                }
+                else => break,
             }
         }
     });
 
     let hub_clone = state.telemetry_hub.clone();
+    let agent_hub_clone = state.hub.clone();
     let recv_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = receiver.next().await {
             match msg {
@@ -281,6 +297,17 @@ async fn handle_auth_and_stream_socket(mut socket: WebSocket, state: ServerState
                                 .filter_map(|x| x.as_u64().map(|n| n as u16))
                                 .collect::<Vec<_>>();
                             hub_clone.update_client_subscriptions(list).await;
+                        } else if let Some(ans) = v.get("answer") {
+                            if let (Some(id), Some(appr)) = (
+                                ans.get("id").and_then(|s| s.as_str()),
+                                ans.get("approved").and_then(|b| b.as_bool()),
+                            ) {
+                                agent_hub_clone.resolve_approval(id, appr).await;
+                            }
+                        } else if let Some(act) = v.get("action") {
+                            let action = act.get("type").and_then(|s| s.as_str()).unwrap_or("");
+                            let cwd = act.get("cwd").and_then(|s| s.as_str()).unwrap_or(".");
+                            let _ = agent_hub_clone.execute_action(action, cwd);
                         }
                     }
                 }

@@ -18,9 +18,11 @@ import {
   useIsDimmed,
   useStats,
   useTheme,
+  useEvents,
 } from './deckStore';
 import { BUILTIN_THEMES } from '@phone-deck/theme-engine';
 import { useDeckBridge } from './useDeckBridge';
+import { ApprovalDialog } from './ApprovalDialog';
 import {
   DigitalClockContainer,
   AnalogClockContainer,
@@ -56,6 +58,23 @@ export default function App() {
   const connected = useDeckStore((s) => s.connected);
   const stats = useStats();
   const theme = useTheme();
+  const events = useEvents();
+
+  const approvalEvent = events.find((e) => e.kind === 'approval');
+
+  const handleResolveApproval = async (approved: boolean) => {
+    if (!approvalEvent) return;
+    try {
+      await fetch(`http://127.0.0.1:8767/api/answer/${approvalEvent.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approved }),
+      });
+    } catch {
+      console.log('Approval resolved locally:', approved);
+    }
+    useDeckStore.getState().removeEvent(approvalEvent.id);
+  };
 
   const [showBudgetHud, setShowBudgetHud] = useState(false);
   const [showPairModal, setShowPairModal] = useState(false);
@@ -608,6 +627,15 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* APPROVAL DIALOG MODAL */}
+      {approvalEvent && (
+        <ApprovalDialog
+          event={approvalEvent}
+          onResolve={handleResolveApproval}
+          onClose={() => useDeckStore.getState().removeEvent(approvalEvent.id)}
+        />
       )}
     </div>
   );
