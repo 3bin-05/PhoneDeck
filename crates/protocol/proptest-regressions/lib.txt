@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 57b5577f2685224f0896bafcad97b9b5370b3ecdbd358fd77054d0508a7881cf # shrinks to a = TelemetryState { metrics: {9: U64(0)} }, b = TelemetryState { metrics: {} }
