@@ -1,6 +1,11 @@
 import React, { useRef, useState, useCallback } from 'react';
 import type { PlacedWidget, ThemeConfig } from '@phone-deck/theme-engine';
 import { WIDGET_CATALOG } from '@phone-deck/widgets';
+import {
+  LiveWallpaper,
+  BUILTIN_WALLPAPERS,
+  DEFAULT_WALLPAPER,
+} from '@phone-deck/wallpaper';
 import { Trash2, Move, Maximize2 } from 'lucide-react';
 
 export interface PhoneCanvasProps {
@@ -23,6 +28,11 @@ export const PhoneCanvas: React.FC<PhoneCanvasProps> = ({
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [resizingId, setResizingId] = useState<string | null>(null);
+
+  const wallpaperManifest =
+    theme.background?.type === 'wallpaper' && BUILTIN_WALLPAPERS[theme.background.ref]
+      ? BUILTIN_WALLPAPERS[theme.background.ref]
+      : DEFAULT_WALLPAPER;
 
   // Drag to Move handler
   const handleMouseDownMove = useCallback(
@@ -141,6 +151,26 @@ export const PhoneCanvas: React.FC<PhoneCanvasProps> = ({
           }}
           className="relative w-[780px] h-[360px] rounded-[18px] border overflow-hidden select-none"
         >
+          {/* Live Wallpaper Background */}
+          <LiveWallpaper
+            manifest={wallpaperManifest}
+            telemetry={{
+              cpuPercent: 38,
+              gpuPercent: 24,
+              netBytesPerSec: 150000,
+              tempCelsius: 48,
+            }}
+            governorInputs={{
+              batteryLevel: 100,
+              isCharging: true,
+              thermalStatus: 0,
+              isDimmed: false,
+              pageWeight: widgets.length,
+              pageVisibility: true,
+            }}
+            accentColor={theme.palette.accent}
+          />
+
           {/* Hairline Grid Background */}
           <div className="absolute inset-0 grid grid-cols-12 grid-rows-6 pointer-events-none">
             {Array.from({ length: 72 }).map((_, i) => (

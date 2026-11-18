@@ -5,7 +5,8 @@ import {
   exportThemeJson,
   importThemeJson,
 } from '@phone-deck/theme-engine';
-import { Palette, Download, Upload, RefreshCw, Check, Image } from 'lucide-react';
+import { BUILTIN_WALLPAPERS } from '@phone-deck/wallpaper';
+import { Palette, Download, Upload, RefreshCw, Check, Image, Sparkles } from 'lucide-react';
 
 export interface ThemeManagerProps {
   currentTheme: ThemeConfig;
@@ -114,6 +115,34 @@ export const ThemeManager: React.FC<ThemeManagerProps> = ({
         <div className="flex items-center space-x-1.5 text-[10px] text-[#71717A]">
           <Image className="w-3.5 h-3.5 text-[#00E599]" />
           <span>SKIN SLOT: ACTIVE</span>
+        </div>
+
+        {/* Live Wallpaper Preset Selector */}
+        <div className="flex items-center space-x-1.5">
+          <span className="text-[10px] text-[#71717A] flex items-center space-x-1">
+            <Sparkles className="w-3 h-3 text-[#7C5CFF]" />
+            <span>WP:</span>
+          </span>
+          <select
+            value={currentTheme.background?.ref || 'aurora-lite'}
+            onChange={(e) =>
+              onUpdateTheme({
+                ...currentTheme,
+                background: {
+                  type: 'wallpaper',
+                  ref: e.target.value,
+                  dim: currentTheme.background?.dim ?? 0.35,
+                },
+              })
+            }
+            className="bg-[#111116] border border-white/[0.1] rounded px-1.5 py-0.5 text-[10px] text-[#EDEDF2] outline-none cursor-pointer"
+          >
+            {Object.entries(BUILTIN_WALLPAPERS).map(([key, wp]) => (
+              <option key={key} value={key}>
+                {wp.name}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 

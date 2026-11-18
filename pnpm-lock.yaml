@@ -334,7 +334,17 @@ importers:
         version: 5.9.3
 
   packages/wallpaper:
+    dependencies:
+      react:
+        specifier: ^19.0.0
+        version: 19.3.1
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.3.1(react@19.3.1)
     devDependencies:
+      '@types/react':
+        specifier: ^19.0.8
+        version: 19.3.0
       typescript:
         specifier: ^5.7.3
         version: 5.9.3

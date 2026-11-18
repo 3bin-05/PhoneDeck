@@ -21,6 +21,11 @@ import {
   useEvents,
 } from './deckStore';
 import { BUILTIN_THEMES } from '@phone-deck/theme-engine';
+import {
+  LiveWallpaper,
+  BUILTIN_WALLPAPERS,
+  DEFAULT_WALLPAPER,
+} from '@phone-deck/wallpaper';
 import { useDeckBridge } from './useDeckBridge';
 import { ApprovalDialog } from './ApprovalDialog';
 import {
@@ -59,6 +64,22 @@ export default function App() {
   const stats = useStats();
   const theme = useTheme();
   const events = useEvents();
+  const metrics = useDeckStore((s) => s.metrics);
+
+  const wallpaperManifest =
+    theme.background?.type === 'wallpaper' && BUILTIN_WALLPAPERS[theme.background.ref]
+      ? BUILTIN_WALLPAPERS[theme.background.ref]
+      : DEFAULT_WALLPAPER;
+
+  const cpuPercent = typeof metrics[1] === 'number' ? metrics[1] / 10 : 38;
+  const gpuPercent = typeof metrics[6] === 'number' ? metrics[6] / 10 : 24;
+  const netIn = typeof metrics[10] === 'number' ? metrics[10] : 120000;
+  const netOut = typeof metrics[11] === 'number' ? metrics[11] : 45000;
+  const tempCelsius = typeof metrics[3] === 'number' ? metrics[3] / 10 : 48;
+  const batteryLevel = typeof metrics[15] === 'number' ? metrics[15] : 85;
+  const isCharging = typeof metrics[16] === 'boolean' ? metrics[16] : true;
+
+  const pageWeight = activePage === 0 ? 7 : activePage === 1 ? 5 : 4;
 
   const approvalEvent = events.find((e) => e.kind === 'approval');
 
@@ -218,6 +239,26 @@ export default function App() {
           >
             {theme.name}
           </button>
+          <button
+            onClick={() => {
+              const wallpapers = Object.keys(BUILTIN_WALLPAPERS);
+              const currKey = theme.background?.ref || 'aurora-lite';
+              const nextIdx = (wallpapers.indexOf(currKey) + 1) % wallpapers.length;
+              const nextKey = wallpapers[nextIdx];
+              useDeckStore.getState().setTheme({
+                ...theme,
+                background: {
+                  type: 'wallpaper',
+                  ref: nextKey,
+                  dim: theme.background?.dim ?? 0.35,
+                },
+              });
+            }}
+            className="text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded transition-all cursor-pointer bg-white/[0.04] text-zinc-400 hover:text-white border border-white/[0.08]"
+            title="Click to cycle Live Wallpaper preset (Aurora / Flow / Starfield / Nebula / Grid / Particles)"
+          >
+            WP: {theme.background?.ref?.replace('-lite', '') || 'aurora'}
+          </button>
         </div>
 
         {/* Center Page Title */}
@@ -282,6 +323,28 @@ export default function App() {
 
       {/* Main 12x6 Grid Viewport with Swipeable Pages */}
       <main className="flex-1 p-2 md:p-3 relative overflow-hidden">
+        {/* Live Wallpaper Background Engine */}
+        <LiveWallpaper
+          manifest={wallpaperManifest}
+          telemetry={{
+            cpuPercent,
+            gpuPercent,
+            netBytesPerSec: netIn + netOut,
+            tempCelsius,
+          }}
+          governorInputs={{
+            batteryLevel,
+            isCharging,
+            thermalStatus: 0,
+            isDimmed,
+            pageWeight,
+            pageVisibility: typeof document !== 'undefined' ? document.visibilityState === 'visible' : true,
+          }}
+          accentColor={theme.palette.accent}
+          showGovernorBadge={showBudgetHud}
+        />
+
+        <div className="relative z-10 w-full h-full">
         <AnimatePresence mode="wait">
           {activePage === 0 && (
             <motion.div
@@ -427,6 +490,7 @@ export default function App() {
             </motion.div>
           )}
         </AnimatePresence>
+        </div>
       </main>
 
       {/* Bottom Footer & Page Dots */}
