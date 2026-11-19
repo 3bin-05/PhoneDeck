@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAmbientStore } from './ambientStore';
 import { useDeckStore } from './deckStore';
@@ -8,78 +8,135 @@ interface NightClockProps {
   onDoubleTap: () => void;
 }
 
-export function NightClockView({ onTap, onDoubleTap }: NightClockProps) {
+interface FlipDigitProps {
+  digit: string;
+  badge?: string | null;
+}
+
+const FlipDigit: React.FC<FlipDigitProps> = ({ digit, badge }) => {
+  return (
+    <div className="relative flex flex-col items-center justify-center bg-[#25252A] rounded-xl sm:rounded-2xl md:rounded-[22px] overflow-hidden shadow-[0_12px_36px_rgba(0,0,0,0.9)] border border-white/[0.05] w-[18.5vw] max-w-[136px] min-w-[62px] aspect-[1/1.55]">
+      {/* Top Half Flap */}
+      <div className="relative w-full h-1/2 overflow-hidden bg-gradient-to-b from-[#323238] via-[#2A2A30] to-[#25252A] border-b-[1.5px] border-black/90 flex items-start justify-center">
+        {/* Optional AM / PM Badge on upper-left */}
+        {badge && (
+          <span className="absolute top-2 left-2.5 sm:top-2.5 sm:left-3.5 text-[11px] sm:text-xs md:text-sm font-black tracking-wider text-[#F4F1E8] font-sans select-none z-10 leading-none">
+            {badge}
+          </span>
+        )}
+
+        {/* Top half numeral */}
+        <div className="absolute top-0 w-full h-[200%] flex items-center justify-center pointer-events-none">
+          <span className="text-[105px] sm:text-[135px] md:text-[160px] font-black font-sans text-[#F4F1E8] tracking-tighter leading-none select-none">
+            {digit}
+          </span>
+        </div>
+      </div>
+
+      {/* Horizontal Seam & Vintage Hinge Pin Notches */}
+      <div className="relative w-full h-[2px] bg-[#0A0A0C] z-20 flex justify-between items-center pointer-events-none">
+        {/* Left hinge notch */}
+        <div className="w-1.5 sm:w-2 h-2.5 sm:h-3.5 -ml-0.5 rounded-r-full bg-[#000000]" />
+        {/* Right hinge notch */}
+        <div className="w-1.5 sm:w-2 h-2.5 sm:h-3.5 -mr-0.5 rounded-l-full bg-[#000000]" />
+      </div>
+
+      {/* Bottom Half Flap */}
+      <div className="relative w-full h-1/2 overflow-hidden bg-gradient-to-b from-[#1F1F24] via-[#222227] to-[#26262B] shadow-[inset_0_5px_8px_rgba(0,0,0,0.65)] flex items-end justify-center">
+        {/* Bottom half numeral */}
+        <div className="absolute bottom-0 w-full h-[200%] flex items-center justify-center pointer-events-none">
+          <span className="text-[105px] sm:text-[135px] md:text-[160px] font-black font-sans text-[#F4F1E8] tracking-tighter leading-none select-none">
+            {digit}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const FlipColon: React.FC = () => {
+  return (
+    <div className="flex flex-col justify-center items-center gap-6 sm:gap-8 md:gap-11 px-1 sm:px-2 md:px-3 h-full select-none">
+      <div className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 md:w-4.5 md:h-4.5 rounded-[3px] bg-[#F4F1E8] shadow-[0_2px_4px_rgba(0,0,0,0.5)]" />
+      <div className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 md:w-4.5 md:h-4.5 rounded-[3px] bg-[#F4F1E8] shadow-[0_2px_4px_rgba(0,0,0,0.5)]" />
+    </div>
+  );
+};
+
+export const NightClockView: React.FC<NightClockProps> = ({ onTap, onDoubleTap }) => {
   const config = useAmbientStore((s) => s.config);
   const state = useAmbientStore((s) => s.state);
-  const rawLux = useAmbientStore((s) => s.rawLux);
-  const filteredLux = useAmbientStore((s) => s.filteredLux);
-  const timeInStateSecs = useAmbientStore((s) => s.timeInStateSecs);
-  const isSensorCovered = useAmbientStore((s) => s.isSensorCovered);
   const hasActiveEventDot = useAmbientStore((s) => s.hasActiveEventDot);
   const wakeAlertUntil = useAmbientStore((s) => s.wakeAlertUntil);
   const events = useDeckStore((s) => s.events);
 
-  // Phone's own clock state (zero network)
-  const [timeStr, setTimeStr] = useState('');
-  const [dateStr, setDateStr] = useState('');
-  const [secondsStr, setSecondsStr] = useState('');
+  // Time components
+  const [digits, setDigits] = useState<{ h1: string; h2: string; m1: string; m2: string; ampm: string | null }>({
+    h1: '0',
+    h2: '7',
+    m1: '3',
+    m2: '5',
+    ampm: 'AM',
+  });
+  const [dateStr, setDateStr] = useState('THURSDAY, NOVEMBER 19, 2026');
 
-  // Burn-in pixel shift offset (a few px shifted every ~60s to protect OLED pixels)
+  // Burn-in pixel shift offset (shifts subtle ±3px every 60s for AMOLED protection)
   const [pixelShift, setPixelShift] = useState({ x: 0, y: 0 });
 
   // Tap handling (distinguish single tap from double tap)
   const tapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Time formatting aligned to exact minute boundary (or 1s if seconds enabled)
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
       let hours = now.getHours();
+      let ampm: string | null = null;
+
       if (!config.is24h) {
+        ampm = hours >= 12 ? 'PM' : 'AM';
         hours = hours % 12 || 12;
       }
+
       const hh = String(hours).padStart(2, '0');
       const mm = String(now.getMinutes()).padStart(2, '0');
-      const ss = String(now.getSeconds()).padStart(2, '0');
 
-      setTimeStr(`${hh}:${mm}`);
-      setSecondsStr(ss);
-
-      // Date: e.g. "WED, NOV 18"
-      const dateFormatted = now.toLocaleDateString(undefined, {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
+      setDigits({
+        h1: hh[0],
+        h2: hh[1],
+        m1: mm[0],
+        m2: mm[1],
+        ampm,
       });
-      setDateStr(dateFormatted.toUpperCase());
+
+      // Format date exactly: "THURSDAY, NOVEMBER 19, 2026"
+      const weekday = now.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
+      const month = now.toLocaleDateString('en-US', { month: 'long' }).toUpperCase();
+      const day = now.getDate();
+      const year = now.getFullYear();
+      setDateStr(`${weekday}, ${month} ${day}, ${year}`);
     };
 
     updateTime();
 
-    if (config.showSeconds) {
-      const interval = setInterval(updateTime, 1000);
-      return () => clearInterval(interval);
-    } else {
-      // Align timer to exact minute boundary
-      let timeoutId: ReturnType<typeof setTimeout>;
-      const scheduleNextMinute = () => {
-        const msUntilNextMinute = 60_000 - (Date.now() % 60_000);
-        timeoutId = setTimeout(() => {
-          updateTime();
-          scheduleNextMinute();
-        }, msUntilNextMinute);
-      };
-      scheduleNextMinute();
-      return () => clearTimeout(timeoutId);
-    }
-  }, [config.is24h, config.showSeconds]);
+    // Schedule next minute update
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const scheduleNextMinute = () => {
+      const msUntilNextMinute = 60_000 - (Date.now() % 60_000);
+      timeoutId = setTimeout(() => {
+        updateTime();
+        scheduleNextMinute();
+      }, msUntilNextMinute);
+    };
+    scheduleNextMinute();
+
+    return () => clearTimeout(timeoutId);
+  }, [config.is24h]);
 
   // OLED burn-in pixel shift every 60s
   useEffect(() => {
     const shiftInterval = setInterval(() => {
-      // Subtle shift within -3px to +3px
-      const ox = (Math.floor(Math.random() * 7) - 3);
-      const oy = (Math.floor(Math.random() * 7) - 3);
+      const ox = Math.floor(Math.random() * 7) - 3;
+      const oy = Math.floor(Math.random() * 7) - 3;
       setPixelShift({ x: ox, y: oy });
     }, 60_000);
 
@@ -88,12 +145,10 @@ export function NightClockView({ onTap, onDoubleTap }: NightClockProps) {
 
   const handleClick = () => {
     if (tapTimeoutRef.current) {
-      // Double tap detected
       clearTimeout(tapTimeoutRef.current);
       tapTimeoutRef.current = null;
       onDoubleTap();
     } else {
-      // Wait to see if second tap arrives within 250ms
       tapTimeoutRef.current = setTimeout(() => {
         tapTimeoutRef.current = null;
         onTap();
@@ -103,44 +158,23 @@ export function NightClockView({ onTap, onDoubleTap }: NightClockProps) {
 
   const latestEvent = events[0];
   const isWakeActive = wakeAlertUntil !== null && Date.now() < wakeAlertUntil;
-
-  // Determine dot color based on latest event kind
-  const dotColor = latestEvent?.kind === 'error'
-    ? '#FF3B5C'
-    : latestEvent?.kind === 'needs_input' || latestEvent?.kind === 'approval'
-    ? '#FFB800'
-    : '#00E599';
+  const dotColor =
+    latestEvent?.kind === 'error'
+      ? '#FF3B5C'
+      : latestEvent?.kind === 'needs_input' || latestEvent?.kind === 'approval'
+      ? '#FFB800'
+      : '#00E599';
 
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.4 }}
+      transition={{ duration: 0.5 }}
       onClick={handleClick}
-      className="fixed inset-0 z-50 bg-[#000000] text-white flex flex-col justify-between items-center p-6 select-none cursor-pointer overflow-hidden"
+      className="fixed inset-0 z-50 bg-[#000000] text-white flex flex-col justify-center items-center p-4 sm:p-6 md:p-8 select-none cursor-pointer overflow-hidden"
     >
-      {/* Top Status Bar: Minimal & discreet */}
-      <div className="w-full flex justify-between items-center text-[11px] font-mono text-zinc-600">
-        <div className="flex items-center space-x-2">
-          {state === 'locked_dark' && (
-            <span className="text-amber-400 font-semibold tracking-wider bg-amber-400/10 px-1.5 py-0.5 rounded text-[9px]">
-              LOCKED DARK
-            </span>
-          )}
-          {isSensorCovered && (
-            <span className="text-amber-500 font-mono text-[9px] bg-amber-500/10 px-1.5 py-0.5 rounded">
-              SENSOR COVERED (&gt;1H AT 0 LUX)
-            </span>
-          )}
-        </div>
-
-        <div className="text-[10px] tracking-widest uppercase text-zinc-700">
-          TAP TO PEEK · 2× TAP LOCK
-        </div>
-      </div>
-
-      {/* Main Clock Area with slow burn-in protection shift */}
+      {/* Clock & Date Area with OLED burn-in safe micro-shift */}
       <div
         style={{
           transform: `translate(${pixelShift.x}px, ${pixelShift.y}px)`,
@@ -148,47 +182,58 @@ export function NightClockView({ onTap, onDoubleTap }: NightClockProps) {
         }}
         className="flex flex-col items-center justify-center my-auto relative"
       >
-        <div className="flex items-baseline space-x-2">
-          {/* Huge thin tabular numerals (Section 7 Void style) */}
-          <span className="text-7xl sm:text-8xl md:text-9xl font-mono font-extralight tracking-tight text-white/90 tabular-nums">
-            {timeStr || '--:--'}
+        {/* Flip Cards Row */}
+        <div className="flex items-center justify-center gap-2 sm:gap-3.5 md:gap-5">
+          {/* Card 1: Hours Tens with AM/PM badge */}
+          <FlipDigit digit={digits.h1} badge={digits.ampm} />
+
+          {/* Card 2: Hours Units */}
+          <FlipDigit digit={digits.h2} />
+
+          {/* Colon Separator */}
+          <FlipColon />
+
+          {/* Card 3: Minutes Tens */}
+          <FlipDigit digit={digits.m1} />
+
+          {/* Card 4: Minutes Units */}
+          <FlipDigit digit={digits.m2} />
+        </div>
+
+        {/* Date Row: "THURSDAY, NOVEMBER 19, 2026" */}
+        <div className="mt-6 sm:mt-8 md:mt-10 text-center flex items-center justify-center gap-3">
+          <span className="text-sm sm:text-lg md:text-2xl font-black tracking-[0.16em] sm:tracking-[0.22em] text-[#F4F1E8] font-sans uppercase select-none">
+            {dateStr}
           </span>
 
-          {config.showSeconds && (
-            <span className="text-2xl sm:text-3xl font-mono font-light text-zinc-500 tabular-nums">
-              {secondsStr}
-            </span>
-          )}
-
-          {/* Discreet Event Dot Indicator */}
+          {/* Discreet AI Event Indicator Dot */}
           {hasActiveEventDot && (
             <div
-              style={{ backgroundColor: dotColor, boxShadow: `0 0 6px ${dotColor}` }}
-              className="w-2.5 h-2.5 rounded-full ml-1 mb-3 animate-pulse"
-              title={`Agent event: ${latestEvent?.title || 'Notification'}`}
+              style={{ backgroundColor: dotColor, boxShadow: `0 0 8px ${dotColor}` }}
+              className="w-2.5 h-2.5 rounded-full animate-pulse shrink-0"
+              title={`Agent: ${latestEvent?.title || 'Notification'}`}
             />
           )}
         </div>
 
-        {/* Small tracked date */}
-        <div className="text-xs sm:text-sm font-mono tracking-[0.25em] text-zinc-500 uppercase mt-2">
-          {dateStr}
-        </div>
+        {/* Locked Dark Indicator (Discreet) */}
+        {state === 'locked_dark' && (
+          <div className="mt-3 text-[10px] tracking-widest text-[#F4F1E8]/30 font-mono uppercase">
+            LOCKED DARK · DOUBLE TAP TO UNLOCK
+          </div>
+        )}
 
-        {/* Wake Notification Dialog (if alertMode === 'wake' and active) */}
+        {/* Wake Dialog (if alertMode === 'wake' and active event) */}
         <AnimatePresence>
           {isWakeActive && latestEvent && (
             <motion.div
-              initial={{ opacity: 0, y: 10 }}
+              initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              className="mt-6 p-4 rounded-xl bg-zinc-900/90 border border-zinc-800 text-left max-w-sm"
+              exit={{ opacity: 0, y: 12 }}
+              className="mt-6 p-4 rounded-xl bg-[#18181D]/90 border border-white/10 text-left max-w-sm"
             >
               <div className="flex items-center space-x-2 text-xs font-mono mb-1">
-                <span
-                  className="w-2 h-2 rounded-full"
-                  style={{ backgroundColor: dotColor }}
-                />
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: dotColor }} />
                 <span className="text-zinc-400 uppercase font-semibold">{latestEvent.agent}</span>
                 <span className="text-zinc-600">·</span>
                 <span className="text-zinc-500">{latestEvent.project}</span>
@@ -199,12 +244,6 @@ export function NightClockView({ onTap, onDoubleTap }: NightClockProps) {
           )}
         </AnimatePresence>
       </div>
-
-      {/* Subtle debug info footer */}
-      <div className="w-full flex justify-between items-center text-[10px] font-mono text-zinc-700">
-        <span>STATE: {state.toUpperCase()} ({timeInStateSecs}S)</span>
-        <span>RAW: {rawLux.toFixed(1)} LX · FILT: {filteredLux.toFixed(1)} LX</span>
-      </div>
     </motion.div>
   );
-}
+};

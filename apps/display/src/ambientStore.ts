@@ -29,12 +29,22 @@ export const DEFAULT_AMBIENT_CONFIG: AmbientConfig = {
   peekDurationSecs: 10,
   minBrightness: 0.02,
   showSeconds: false,
-  is24h: true,
+  is24h: false, // 12-hour AM/PM flip clock matching reference image
   alertMode: 'dot',
   scheduleFallback: true,
   scheduleStart: '23:00',
   scheduleEnd: '07:00',
 };
+
+export function applyScreenBrightness(value: number) {
+  if (typeof window !== 'undefined' && (window as any).PhoneDeckNative?.setBrightness) {
+    try {
+      (window as any).PhoneDeckNative.setBrightness(value);
+      return;
+    } catch {}
+  }
+  setScreenBrightness(value).catch(() => {});
+}
 
 // Pure Lux Filter: median of last 5 samples + EMA smoothing
 class LuxFilter {
@@ -156,7 +166,7 @@ export const useAmbientStore = create<AmbientStoreState>((set, get) => ({
     if (!config.enabled) {
       if (state !== 'bright') {
         set({ state: 'bright', rawLux, filteredLux: filtered, timeInStateSecs, isSensorCovered, stateEnteredTime: now });
-        setScreenBrightness(-1.0).catch(() => {});
+        applyScreenBrightness(-1.0);
         broadcastDisplayState('bright');
       } else {
         set({ rawLux, filteredLux: filtered, timeInStateSecs, isSensorCovered });
@@ -174,7 +184,7 @@ export const useAmbientStore = create<AmbientStoreState>((set, get) => ({
     if (state === 'peek') {
       if (peekExpiresTime && now >= peekExpiresTime) {
         peekExpiresTime = null;
-        setScreenBrightness(config.minBrightness).catch(() => {});
+        applyScreenBrightness(config.minBrightness);
         broadcastDisplayState('dark');
         set({
           state: 'dark',
@@ -196,7 +206,7 @@ export const useAmbientStore = create<AmbientStoreState>((set, get) => ({
         if (conditionStartTime === null) conditionStartTime = now;
         if (now - conditionStartTime >= config.darkEnterDelaySecs * 1000) {
           conditionStartTime = null;
-          setScreenBrightness(config.minBrightness).catch(() => {});
+          applyScreenBrightness(config.minBrightness);
           broadcastDisplayState('dark');
           set({
             state: 'dark',
@@ -221,7 +231,7 @@ export const useAmbientStore = create<AmbientStoreState>((set, get) => ({
         if (conditionStartTime === null) conditionStartTime = now;
         if (now - conditionStartTime >= config.darkExitDelaySecs * 1000) {
           conditionStartTime = null;
-          setScreenBrightness(-1.0).catch(() => {});
+          applyScreenBrightness(-1.0);
           broadcastDisplayState('bright');
           set({
             state: 'bright',
@@ -248,12 +258,12 @@ export const useAmbientStore = create<AmbientStoreState>((set, get) => ({
     if (state === 'dark') {
       // Enter Peek mode: normal UI at minimum brightness for 10 s
       peekExpiresTime = now + config.peekDurationSecs * 1000;
-      setScreenBrightness(config.minBrightness).catch(() => {});
+      applyScreenBrightness(config.minBrightness);
       set({ state: 'peek', stateEnteredTime: now, timeInStateSecs: 0 });
     } else if (state === 'peek') {
       // Return to dark immediately
       peekExpiresTime = null;
-      setScreenBrightness(config.minBrightness).catch(() => {});
+      applyScreenBrightness(config.minBrightness);
       set({ state: 'dark', stateEnteredTime: now, timeInStateSecs: 0 });
     }
   },
@@ -264,12 +274,12 @@ export const useAmbientStore = create<AmbientStoreState>((set, get) => ({
 
     if (state === 'dark' || state === 'locked_dark') {
       // Force bright
-      setScreenBrightness(-1.0).catch(() => {});
+      applyScreenBrightness(-1.0);
       broadcastDisplayState('locked_bright');
       set({ state: 'locked_bright', stateEnteredTime: now, timeInStateSecs: 0 });
     } else {
       // Force dark
-      setScreenBrightness(config.minBrightness).catch(() => {});
+      applyScreenBrightness(config.minBrightness);
       broadcastDisplayState('locked_dark');
       set({ state: 'locked_dark', stateEnteredTime: now, timeInStateSecs: 0 });
     }
@@ -282,9 +292,9 @@ export const useAmbientStore = create<AmbientStoreState>((set, get) => ({
     const target: AmbientStateKind = filtered < config.darkEnterLux ? 'dark' : 'bright';
 
     if (target === 'dark') {
-      setScreenBrightness(config.minBrightness).catch(() => {});
+      applyScreenBrightness(config.minBrightness);
     } else {
-      setScreenBrightness(-1.0).catch(() => {});
+      applyScreenBrightness(-1.0);
     }
     broadcastDisplayState(target);
     set({ state: target, stateEnteredTime: now, timeInStateSecs: 0 });
@@ -308,9 +318,9 @@ export const useAmbientStore = create<AmbientStoreState>((set, get) => ({
     const target: AmbientStateKind = isNight ? 'dark' : 'bright';
     if (state !== target) {
       if (target === 'dark') {
-        setScreenBrightness(config.minBrightness).catch(() => {});
+        applyScreenBrightness(config.minBrightness);
       } else {
-        setScreenBrightness(-1.0).catch(() => {});
+        applyScreenBrightness(-1.0);
       }
       broadcastDisplayState(target);
       set({ state: target, stateEnteredTime: Date.now(), timeInStateSecs: 0 });
@@ -341,13 +351,13 @@ export const useAmbientStore = create<AmbientStoreState>((set, get) => ({
       } else if (config.alertMode === 'wake') {
         // Wake notification at minimum brightness for 20 s
         set({ wakeAlertUntil: now + 20_000, hasActiveEventDot: true });
-        setScreenBrightness(config.minBrightness).catch(() => {});
+        applyScreenBrightness(config.minBrightness);
         setTimeout(() => {
           const currentUntil = get().wakeAlertUntil;
           if (currentUntil && Date.now() >= currentUntil) {
             set({ wakeAlertUntil: null });
             if (get().state === 'dark' || get().state === 'locked_dark') {
-              setScreenBrightness(config.minBrightness).catch(() => {});
+              applyScreenBrightness(config.minBrightness);
             }
           }
         }, 20_000);
@@ -360,6 +370,22 @@ export const useAmbientStore = create<AmbientStoreState>((set, get) => ({
   initHardwareSensor: () => {
     let unlisten: (() => void) | null = null;
     let cancelled = false;
+
+    // Connect to native Android SensorManager bridge (Samsung Galaxy J8)
+    if (typeof window !== 'undefined') {
+      (window as any).__onNativeLux = (lux: number) => {
+        if (!cancelled && typeof lux === 'number') {
+          get().pushLux(lux);
+        }
+      };
+
+      if ((window as any).PhoneDeckNative?.isLightSensorAvailable) {
+        try {
+          const avail = (window as any).PhoneDeckNative.isLightSensorAvailable();
+          get().setLightSensorAvailable(avail);
+        } catch {}
+      }
+    }
 
     isLightSensorAvailable()
       .then((avail: boolean) => {
@@ -376,12 +402,30 @@ export const useAmbientStore = create<AmbientStoreState>((set, get) => ({
         }
       })
       .catch(() => {
-        if (!cancelled) get().setLightSensorAvailable(false);
+        if (!cancelled && !(window as any).PhoneDeckNative) {
+          get().setLightSensorAvailable(false);
+        }
       });
+
+    // Also check standard Web API AmbientLightSensor if present in WebView
+    if (typeof window !== 'undefined' && 'AmbientLightSensor' in window) {
+      try {
+        const sensor = new (window as any).AmbientLightSensor({ frequency: 1 });
+        sensor.addEventListener('reading', () => {
+          if (!cancelled && typeof sensor.illuminance === 'number') {
+            get().pushLux(sensor.illuminance);
+          }
+        });
+        sensor.start();
+      } catch {}
+    }
 
     return () => {
       cancelled = true;
       if (unlisten) unlisten();
+      if (typeof window !== 'undefined') {
+        delete (window as any).__onNativeLux;
+      }
     };
   },
 }));

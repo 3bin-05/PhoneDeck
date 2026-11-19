@@ -12,6 +12,9 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 
+    <!-- Ambient light sensor feature for auto-dim on Galaxy J8 -->
+    <uses-feature android:name="android.hardware.sensor.light" android:required="false" />
+
     <!-- AndroidTV support -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
 

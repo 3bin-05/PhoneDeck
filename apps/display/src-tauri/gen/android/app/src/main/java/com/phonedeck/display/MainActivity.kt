@@ -1,11 +1,17 @@
 package com.phonedeck.display
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.view.WindowManager
+import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -15,10 +21,32 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 
 class MainActivity : TauriActivity() {
+  private var sensorManager: SensorManager? = null
+  private var lightSensor: Sensor? = null
+  private var targetWebView: WebView? = null
+
+  private val lightListener = object : SensorEventListener {
+    override fun onSensorChanged(event: SensorEvent?) {
+      if (event?.sensor?.type == Sensor.TYPE_LIGHT) {
+        val lux = event.values[0]
+        runOnUiThread {
+          targetWebView?.evaluateJavascript("window.__onNativeLux && window.__onNativeLux($lux);", null)
+        }
+      }
+    }
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+  }
+
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     hideSystemUI()
+
+    // Initialize native light sensor for auto-dim night clock (Samsung Galaxy J8)
+    sensorManager = getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+    lightSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_LIGHT)
+    registerLightSensor()
 
     // Proactively request camera permission on launch if not yet granted
     if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
@@ -26,8 +54,37 @@ class MainActivity : TauriActivity() {
     }
   }
 
+  private fun registerLightSensor() {
+    lightSensor?.let {
+      sensorManager?.registerListener(lightListener, it, SensorManager.SENSOR_DELAY_NORMAL)
+    }
+  }
+
   override fun onWebViewCreate(webView: WebView) {
     super.onWebViewCreate(webView)
+    targetWebView = webView
+
+    // Native bridge for screen brightness control and light sensor check
+    webView.addJavascriptInterface(object {
+      @JavascriptInterface
+      fun setBrightness(value: Float) {
+        runOnUiThread {
+          val layoutParams = window.attributes
+          if (value < 0.0f) {
+            layoutParams.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+          } else {
+            layoutParams.screenBrightness = value.coerceIn(0.01f, 1.0f)
+          }
+          window.attributes = layoutParams
+        }
+      }
+
+      @JavascriptInterface
+      fun isLightSensorAvailable(): Boolean {
+        return lightSensor != null
+      }
+    }, "PhoneDeckNative")
+
     webView.webChromeClient = object : WebChromeClient() {
       override fun onPermissionRequest(request: PermissionRequest) {
         val requestedResources = request.resources
@@ -76,6 +133,12 @@ class MainActivity : TauriActivity() {
   override fun onResume() {
     super.onResume()
     hideSystemUI()
+    registerLightSensor()
+  }
+
+  override fun onPause() {
+    super.onPause()
+    sensorManager?.unregisterListener(lightListener)
   }
 
   private fun hideSystemUI() {
