@@ -5,6 +5,9 @@ $env:ANDROID_HOME = "C:\Users\ebin0\AppData\Local\Android\Sdk"
 $env:NDK_HOME = "C:\Users\ebin0\AppData\Local\Android\Sdk\ndk\26.1.10909125"
 $env:PATH = "C:\Users\ebin0\AppData\Roaming\npm;$env:JAVA_HOME\bin;$env:PATH"
 
+Write-Host "Syncing frontend assets from dist to Android main/assets..."
+Copy-Item "D:\PhoneDeck\apps\display\dist\*" "D:\PhoneDeck\apps\display\src-tauri\gen\android\app\src\main\assets\" -Recurse -Force
+
 Set-Location "D:\PhoneDeck\apps\display\src-tauri\gen\android"
 
 Write-Host "Running Gradle assembleUniversalRelease..."

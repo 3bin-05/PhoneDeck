@@ -82,6 +82,20 @@ export default function App() {
     return useUpdaterStore.getState().initUpdater();
   }, []);
 
+  useEffect(() => {
+    const handleActivity = () => {
+      useAmbientStore.getState().extendPeek();
+    };
+    window.addEventListener('pointerdown', handleActivity, { passive: true });
+    window.addEventListener('touchstart', handleActivity, { passive: true });
+    window.addEventListener('keydown', handleActivity, { passive: true });
+    return () => {
+      window.removeEventListener('pointerdown', handleActivity);
+      window.removeEventListener('touchstart', handleActivity);
+      window.removeEventListener('keydown', handleActivity);
+    };
+  }, []);
+
   const activePage = useActivePage();
   const totalPages = useDeckStore((s) => s.totalPages);
   const isDimmed = useIsDimmed();
@@ -264,13 +278,13 @@ export default function App() {
         <div className="h-7 bg-amber-500/10 border-b border-amber-500/20 px-4 flex items-center justify-between text-[11px] font-mono text-amber-300 z-30 shrink-0">
           <span className="flex items-center space-x-1.5">
             <Moon className="w-3.5 h-3.5" />
-            <span>PEEK MODE (10S AUTO-RETURN TO DARK)</span>
+            <span>STEAM DECK MODE (NIGHT AWAKE)</span>
           </span>
           <button
             onClick={() => useAmbientStore.getState().handleSingleTap()}
-            className="text-[10px] uppercase font-semibold text-amber-200 hover:text-white px-1.5 py-0.5 rounded bg-amber-500/20 cursor-pointer"
+            className="text-[10px] uppercase font-semibold text-amber-200 hover:text-white px-2 py-0.5 rounded bg-amber-500/20 cursor-pointer"
           >
-            RETURN TO DARK ✕
+            RETURN TO CLOCK ✕
           </button>
         </div>
       )}

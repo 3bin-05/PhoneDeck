@@ -26,14 +26,14 @@ export const DEFAULT_AMBIENT_CONFIG: AmbientConfig = {
   darkExitLux: 12.0,
   darkEnterDelaySecs: 10,
   darkExitDelaySecs: 3,
-  peekDurationSecs: 10,
+  peekDurationSecs: 60,
   minBrightness: 0.02,
   showSeconds: false,
   is24h: false, // 12-hour AM/PM flip clock matching reference image
   alertMode: 'dot',
   scheduleFallback: true,
-  scheduleStart: '23:00',
-  scheduleEnd: '07:00',
+  scheduleStart: '22:00', // 10:00 PM (end of peak hours 6am - 10pm)
+  scheduleEnd: '06:00',   // 6:00 AM (start of peak hours 6am - 10pm)
 };
 
 export function applyScreenBrightness(value: number) {
@@ -100,6 +100,7 @@ export interface AmbientStoreState {
   // Actions
   pushLux: (rawLux: number) => void;
   handleSingleTap: () => void;
+  extendPeek: () => void;
   handleDoubleTap: () => void;
   unlock: () => void;
   evaluateSchedule: () => void;
@@ -255,16 +256,26 @@ export const useAmbientStore = create<AmbientStoreState>((set, get) => ({
     const { state, config } = get();
     const now = Date.now();
 
-    if (state === 'dark') {
-      // Enter Peek mode: normal UI at minimum brightness for 10 s
+    if (state === 'dark' || state === 'locked_dark') {
+      // Enter Peek / Steam Deck mode: normal UI at full brightness
       peekExpiresTime = now + config.peekDurationSecs * 1000;
-      applyScreenBrightness(config.minBrightness);
+      applyScreenBrightness(-1.0);
+      broadcastDisplayState('peek');
       set({ state: 'peek', stateEnteredTime: now, timeInStateSecs: 0 });
     } else if (state === 'peek') {
       // Return to dark immediately
       peekExpiresTime = null;
       applyScreenBrightness(config.minBrightness);
+      broadcastDisplayState('dark');
       set({ state: 'dark', stateEnteredTime: now, timeInStateSecs: 0 });
+    }
+  },
+
+  extendPeek: () => {
+    const { state, config } = get();
+    if (state === 'peek') {
+      const now = Date.now();
+      peekExpiresTime = now + config.peekDurationSecs * 1000;
     }
   },
 

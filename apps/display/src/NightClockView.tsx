@@ -15,50 +15,43 @@ interface FlipDigitProps {
 
 const FlipDigit: React.FC<FlipDigitProps> = ({ digit, badge }) => {
   return (
-    <div className="relative flex flex-col items-center justify-center bg-[#25252A] rounded-xl sm:rounded-2xl md:rounded-[22px] overflow-hidden shadow-[0_12px_36px_rgba(0,0,0,0.9)] border border-white/[0.05] w-[18.5vw] max-w-[136px] min-w-[62px] aspect-[1/1.55]">
-      {/* Top Half Flap */}
-      <div className="relative w-full h-1/2 overflow-hidden bg-gradient-to-b from-[#323238] via-[#2A2A30] to-[#25252A] border-b-[1.5px] border-black/90 flex items-start justify-center">
-        {/* Optional AM / PM Badge on upper-left */}
-        {badge && (
-          <span className="absolute top-2 left-2.5 sm:top-2.5 sm:left-3.5 text-[11px] sm:text-xs md:text-sm font-black tracking-wider text-[#F4F1E8] font-sans select-none z-10 leading-none">
-            {badge}
-          </span>
-        )}
+    <div className="relative flex flex-col items-center justify-center bg-[#2B2A2F] rounded-xl sm:rounded-2xl md:rounded-[22px] overflow-hidden shadow-[0_12px_36px_rgba(0,0,0,0.95)] border border-white/[0.04] w-[18vw] max-w-[140px] min-w-[64px] aspect-[1/1.38]">
+      {/* Optional AM / PM Badge on upper-left of first card */}
+      {badge && (
+        <span className="absolute top-2 left-2.5 sm:top-2.5 sm:left-3.5 text-xs sm:text-sm md:text-base font-bold tracking-widest text-[#F4F0E8] font-flip select-none z-30 leading-none">
+          {badge}
+        </span>
+      )}
 
-        {/* Top half numeral */}
-        <div className="absolute top-0 w-full h-[200%] flex items-center justify-center pointer-events-none">
-          <span className="text-[105px] sm:text-[135px] md:text-[160px] font-black font-sans text-[#F4F1E8] tracking-tighter leading-none select-none">
-            {digit}
-          </span>
-        </div>
+      {/* Top half subtle lighting gradient */}
+      <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-white/[0.03] to-transparent pointer-events-none z-10" />
+
+      {/* The Centered Condensed Numeral */}
+      <div className="relative flex items-center justify-center w-full h-full select-none pointer-events-none">
+        <span className="text-[92px] sm:text-[124px] md:text-[156px] font-normal font-flip text-[#F4F0E8] tracking-tighter leading-none select-none translate-y-[2%]">
+          {digit}
+        </span>
       </div>
 
-      {/* Horizontal Seam & Vintage Hinge Pin Notches */}
-      <div className="relative w-full h-[2px] bg-[#0A0A0C] z-20 flex justify-between items-center pointer-events-none">
+      {/* Horizontal Seam splitting the card with 3D shadow and hinge pin cutouts */}
+      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[2.5px] bg-[#121114] border-b border-black/40 z-20 flex justify-between items-center pointer-events-none">
         {/* Left hinge notch */}
-        <div className="w-1.5 sm:w-2 h-2.5 sm:h-3.5 -ml-0.5 rounded-r-full bg-[#000000]" />
+        <div className="w-1.5 sm:w-2 h-3 sm:h-3.5 -ml-1 rounded-r-full bg-[#000000]" />
         {/* Right hinge notch */}
-        <div className="w-1.5 sm:w-2 h-2.5 sm:h-3.5 -mr-0.5 rounded-l-full bg-[#000000]" />
+        <div className="w-1.5 sm:w-2 h-3 sm:h-3.5 -mr-1 rounded-l-full bg-[#000000]" />
       </div>
 
-      {/* Bottom Half Flap */}
-      <div className="relative w-full h-1/2 overflow-hidden bg-gradient-to-b from-[#1F1F24] via-[#222227] to-[#26262B] shadow-[inset_0_5px_8px_rgba(0,0,0,0.65)] flex items-end justify-center">
-        {/* Bottom half numeral */}
-        <div className="absolute bottom-0 w-full h-[200%] flex items-center justify-center pointer-events-none">
-          <span className="text-[105px] sm:text-[135px] md:text-[160px] font-black font-sans text-[#F4F1E8] tracking-tighter leading-none select-none">
-            {digit}
-          </span>
-        </div>
-      </div>
+      {/* Bottom half subtle recessed shadow */}
+      <div className="absolute bottom-0 left-0 right-0 h-1/2 shadow-[inset_0_4px_6px_rgba(0,0,0,0.45)] pointer-events-none z-10" />
     </div>
   );
 };
 
 const FlipColon: React.FC = () => {
   return (
-    <div className="flex flex-col justify-center items-center gap-6 sm:gap-8 md:gap-11 px-1 sm:px-2 md:px-3 h-full select-none">
-      <div className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 md:w-4.5 md:h-4.5 rounded-[3px] bg-[#F4F1E8] shadow-[0_2px_4px_rgba(0,0,0,0.5)]" />
-      <div className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 md:w-4.5 md:h-4.5 rounded-[3px] bg-[#F4F1E8] shadow-[0_2px_4px_rgba(0,0,0,0.5)]" />
+    <div className="flex flex-col justify-center items-center gap-7 sm:gap-10 md:gap-13 px-1 sm:px-2 md:px-2.5 h-full select-none">
+      <div className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 rounded-[2px] bg-[#F4F0E8] shadow-[0_2px_4px_rgba(0,0,0,0.6)]" />
+      <div className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 rounded-[2px] bg-[#F4F0E8] shadow-[0_2px_4px_rgba(0,0,0,0.6)]" />
     </div>
   );
 };
@@ -170,7 +163,7 @@ export const NightClockView: React.FC<NightClockProps> = ({ onTap, onDoubleTap }
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.5 }}
+      transition={{ duration: 0.4 }}
       onClick={handleClick}
       className="fixed inset-0 z-50 bg-[#000000] text-white flex flex-col justify-center items-center p-4 sm:p-6 md:p-8 select-none cursor-pointer overflow-hidden"
     >
@@ -183,7 +176,7 @@ export const NightClockView: React.FC<NightClockProps> = ({ onTap, onDoubleTap }
         className="flex flex-col items-center justify-center my-auto relative"
       >
         {/* Flip Cards Row */}
-        <div className="flex items-center justify-center gap-2 sm:gap-3.5 md:gap-5">
+        <div className="flex items-center justify-center gap-2 sm:gap-3.5 md:gap-4.5">
           {/* Card 1: Hours Tens with AM/PM badge */}
           <FlipDigit digit={digits.h1} badge={digits.ampm} />
 
@@ -202,7 +195,7 @@ export const NightClockView: React.FC<NightClockProps> = ({ onTap, onDoubleTap }
 
         {/* Date Row: "THURSDAY, NOVEMBER 19, 2026" */}
         <div className="mt-6 sm:mt-8 md:mt-10 text-center flex items-center justify-center gap-3">
-          <span className="text-sm sm:text-lg md:text-2xl font-black tracking-[0.16em] sm:tracking-[0.22em] text-[#F4F1E8] font-sans uppercase select-none">
+          <span className="text-base sm:text-xl md:text-2xl font-normal tracking-[0.16em] sm:tracking-[0.22em] text-[#F4F0E8] font-flip uppercase select-none">
             {dateStr}
           </span>
 
@@ -218,7 +211,7 @@ export const NightClockView: React.FC<NightClockProps> = ({ onTap, onDoubleTap }
 
         {/* Locked Dark Indicator (Discreet) */}
         {state === 'locked_dark' && (
-          <div className="mt-3 text-[10px] tracking-widest text-[#F4F1E8]/30 font-mono uppercase">
+          <div className="mt-3 text-[10px] tracking-widest text-[#F4F0E8]/30 font-mono uppercase">
             LOCKED DARK · DOUBLE TAP TO UNLOCK
           </div>
         )}
