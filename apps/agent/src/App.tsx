@@ -26,6 +26,7 @@ import {
   Download,
   Bot,
 } from 'lucide-react';
+import { invoke, isTauri } from '@tauri-apps/api/core';
 import { AiSessionsWidget, AiQuotasWidget } from '@phone-deck/widgets';
 
 interface PairingStatus {
@@ -78,12 +79,11 @@ export default function App() {
   const [adbMessage, setAdbMessage] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
 
-  const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+  const inTauri = typeof window !== 'undefined' && isTauri();
 
   const fetchPairingStatus = async () => {
-    if (isTauri) {
+    if (inTauri) {
       try {
-        const { invoke } = await import('@tauri-apps/api/core');
         const res = await invoke<PairingStatus>('get_pairing_status');
         setPairingStatus(res);
         setCountdown(res.expires_in_seconds);
@@ -106,9 +106,8 @@ export default function App() {
   };
 
   const fetchPairedDevices = async () => {
-    if (isTauri) {
+    if (inTauri) {
       try {
-        const { invoke } = await import('@tauri-apps/api/core');
         const res = await invoke<PairedDevice[]>('get_paired_devices');
         setPairedDevices(res);
       } catch (err) {
@@ -128,9 +127,8 @@ export default function App() {
 
   const handleRefreshToken = async () => {
     setLoading(true);
-    if (isTauri) {
+    if (inTauri) {
       try {
-        const { invoke } = await import('@tauri-apps/api/core');
         const res = await invoke<PairingStatus>('refresh_pairing_token');
         setPairingStatus(res);
         setCountdown(res.expires_in_seconds);
@@ -144,9 +142,8 @@ export default function App() {
   };
 
   const handleRevokeDevice = async (deviceId: string) => {
-    if (isTauri) {
+    if (inTauri) {
       try {
-        const { invoke } = await import('@tauri-apps/api/core');
         await invoke('revoke_device', { deviceId });
         await fetchPairedDevices();
       } catch (err) {
@@ -158,9 +155,8 @@ export default function App() {
   };
 
   const handleRevokeAll = async () => {
-    if (isTauri) {
+    if (inTauri) {
       try {
-        const { invoke } = await import('@tauri-apps/api/core');
         await invoke('revoke_all_devices');
         await fetchPairedDevices();
       } catch (err) {
@@ -180,9 +176,8 @@ export default function App() {
   };
 
   const fetchAdbStatus = async () => {
-    if (isTauri) {
+    if (inTauri) {
       try {
-        const { invoke } = await import('@tauri-apps/api/core');
         const res = await invoke<AdbStatus>('get_adb_status');
         setAdbStatus(res);
       } catch (err) {
@@ -192,11 +187,10 @@ export default function App() {
   };
 
   const handleAdbInstall = async () => {
-    if (!isTauri) return;
+    if (!inTauri) return;
     setInstallingApk(true);
     setAdbMessage(null);
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
       const msg = await invoke<string>('adb_install_phone_apk');
       setAdbMessage(msg);
       fetchAdbStatus();
@@ -208,9 +202,8 @@ export default function App() {
   };
 
   const handleAdbLaunch = async () => {
-    if (!isTauri) return;
+    if (!inTauri) return;
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
       const msg = await invoke<string>('adb_launch_phone_app');
       setAdbMessage(msg);
     } catch (err: any) {
@@ -219,9 +212,8 @@ export default function App() {
   };
 
   const fetchMetrics = async () => {
-    if (isTauri) {
+    if (inTauri) {
       try {
-        const { invoke } = await import('@tauri-apps/api/core');
         const res = await invoke<SystemMetrics>('get_system_metrics');
         setMetrics(res);
       } catch (err) {

@@ -11,9 +11,15 @@ $env:AR_aarch64_linux_android = "$ndkBin\llvm-ar.exe"
 $env:CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER = "$ndkBin\aarch64-linux-android23-clang.cmd"
 
 Write-Host "=== Compiling armv7-linux-androideabi release ==="
-cargo build --manifest-path apps/display/src-tauri/Cargo.toml --target armv7-linux-androideabi --release
+cargo build --manifest-path apps/display/src-tauri/Cargo.toml --lib --target armv7-linux-androideabi --release
 
 Write-Host "=== Compiling aarch64-linux-android release ==="
-cargo build --manifest-path apps/display/src-tauri/Cargo.toml --target aarch64-linux-android --release
+cargo build --manifest-path apps/display/src-tauri/Cargo.toml --lib --target aarch64-linux-android --release
+
+Write-Host "=== Copying fresh .so files to jniLibs ==="
+New-Item -ItemType Directory -Force -Path "apps/display/src-tauri/gen/android/app/src/main/jniLibs/armeabi-v7a"
+New-Item -ItemType Directory -Force -Path "apps/display/src-tauri/gen/android/app/src/main/jniLibs/arm64-v8a"
+Copy-Item "target/armv7-linux-androideabi/release/libdisplay_lib.so" "apps/display/src-tauri/gen/android/app/src/main/jniLibs/armeabi-v7a/libdisplay_lib.so" -Force
+Copy-Item "target/aarch64-linux-android/release/libdisplay_lib.so" "apps/display/src-tauri/gen/android/app/src/main/jniLibs/arm64-v8a/libdisplay_lib.so" -Force
 
 Write-Host "=== Rust Android builds complete ==="

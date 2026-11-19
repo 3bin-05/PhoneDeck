@@ -25,6 +25,19 @@ android {
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
     }
+    signingConfigs {
+        create("release") {
+            val ksFile = file("../phonedeck.keystore")
+            if (ksFile.exists()) {
+                storeFile = ksFile
+                storePassword = "phonedeckpass"
+                keyAlias = "phonedeck"
+                keyPassword = "phonedeckpass"
+            } else {
+                initWith(getByName("debug"))
+            }
+        }
+    }
     buildTypes {
         getByName("debug") {
             applicationIdSuffix = ".debug"
@@ -40,7 +53,7 @@ android {
             }
         }
         getByName("release") {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
             optimization {
                enable = true
             }

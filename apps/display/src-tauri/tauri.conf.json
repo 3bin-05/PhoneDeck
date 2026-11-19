@@ -5,7 +5,7 @@
   "identifier": "com.phonedeck.display",
   "build": {
     "frontendDist": "../dist",
-    "devUrl": "http://localhost:5174",
+    "devUrl": null,
     "beforeDevCommand": "pnpm dev",
     "beforeBuildCommand": "pnpm build"
   },

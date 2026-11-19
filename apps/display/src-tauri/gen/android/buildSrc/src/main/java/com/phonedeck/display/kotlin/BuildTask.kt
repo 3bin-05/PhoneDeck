@@ -84,19 +84,23 @@ abstract class BuildTask : DefaultTask() {
         )
         val srcSo = candidateLocations.firstOrNull { it.exists() && it.length() > 0 }
         if (dstSo.exists() && dstSo.length() > 0) {
-            if (srcSo == null || dstSo.length() == srcSo.length()) {
+            if (srcSo == null || dstSo.lastModified() >= srcSo.lastModified()) {
                 println("PhoneDeck BuildTask: using existing up-to-date jniLibs so at $dstSo (${dstSo.length()} bytes)")
                 return true
             }
         }
         if (srcSo != null) {
             dstDir.mkdirs()
-            java.nio.file.Files.copy(
-                srcSo.toPath(),
-                dstSo.toPath(),
-                java.nio.file.StandardCopyOption.REPLACE_EXISTING
-            )
-            println("PhoneDeck BuildTask: copied fresh $srcSo to $dstSo (${dstSo.length()} bytes)")
+            try {
+                java.nio.file.Files.copy(
+                    srcSo.toPath(),
+                    dstSo.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                )
+                println("PhoneDeck BuildTask: copied fresh $srcSo to $dstSo (${dstSo.length()} bytes)")
+            } catch (e: Exception) {
+                println("PhoneDeck BuildTask: copy exception (may already be in use): ${e.message}")
+            }
             return dstSo.exists() && dstSo.length() > 0
         }
         println("PhoneDeck BuildTask: no candidate .so found for $triple/$profile in $candidateLocations")

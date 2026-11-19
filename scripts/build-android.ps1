@@ -13,6 +13,9 @@ Write-Host "Running Gradle assembleUniversalRelease..."
 Write-Host "Running Gradle assembleArmRelease..."
 .\gradlew.bat assembleArmRelease --console=plain
 
+Write-Host "Running Gradle assembleArm64Release..."
+.\gradlew.bat assembleArm64Release --console=plain
+
 $uni = "D:\PhoneDeck\apps\display\src-tauri\gen\android\app\build\outputs\apk\universal\release\app-universal-release.apk"
 $arm = "D:\PhoneDeck\apps\display\src-tauri\gen\android\app\build\outputs\apk\arm\release\app-arm-release.apk"
 $arm64 = "D:\PhoneDeck\apps\display\src-tauri\gen\android\app\build\outputs\apk\arm64\release\app-arm64-release.apk"

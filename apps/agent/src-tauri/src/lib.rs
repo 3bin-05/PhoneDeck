@@ -259,11 +259,26 @@ pub fn run() {
                         }
                     });
 
-                if let Some(icon) = app.default_window_icon() {
-                    tray_builder = tray_builder.icon(icon.clone());
+                let tray_icon = tauri::image::Image::from_bytes(include_bytes!("../icons/32x32.png"))
+                    .ok()
+                    .or_else(|| app.default_window_icon().cloned());
+
+                if let Some(icon) = tray_icon {
+                    tray_builder = tray_builder.icon(icon);
+                    if let Err(e) = tray_builder.build(app) {
+                        log::warn!("[Agent] Failed to build tray icon: {}", e);
+                    } else {
+                        log::info!("[Agent] System tray icon registered successfully");
+                    }
+                } else {
+                    log::warn!("[Agent] No tray icon available, skipping tray builder");
                 }
 
-                let _ = tray_builder.build(app)?;
+                if let Some(window) = app.get_webview_window("main") {
+                    if let Ok(icon) = tauri::image::Image::from_bytes(include_bytes!("../icons/128x128.png")) {
+                        let _ = window.set_icon(icon);
+                    }
+                }
             }
 
             Ok(())
