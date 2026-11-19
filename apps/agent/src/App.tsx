@@ -261,7 +261,7 @@ export default function App() {
       {/* Top Header / Status bar */}
       <header className="h-12 border-b border-white/[0.08] px-5 flex items-center justify-between shrink-0 bg-[#000000]">
         <div className="flex items-center gap-3">
-          <div className="w-2.5 h-2.5 rounded-full bg-[#7C5CFF] shadow-[0_0_12px_#7C5CFF]" />
+          <img src="/logo.webp" className="w-5 h-5 rounded-md object-contain shadow-[0_0_12px_rgba(124,92,255,0.4)]" alt="PhoneDeck" />
           <span className="font-semibold tracking-wider text-xs uppercase text-[#EDEDF2]">
             Phone Deck <span className="text-[#7C5CFF]">Agent</span>
           </span>

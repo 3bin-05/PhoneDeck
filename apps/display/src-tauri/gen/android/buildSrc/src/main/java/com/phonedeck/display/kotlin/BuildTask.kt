@@ -83,6 +83,12 @@ abstract class BuildTask : DefaultTask() {
             File(proj, "../../../../target/$triple/$profile/libdisplay_lib.so")
         )
         val srcSo = candidateLocations.firstOrNull { it.exists() && it.length() > 0 }
+        if (dstSo.exists() && dstSo.length() > 0) {
+            if (srcSo == null || dstSo.length() == srcSo.length()) {
+                println("PhoneDeck BuildTask: using existing up-to-date jniLibs so at $dstSo (${dstSo.length()} bytes)")
+                return true
+            }
+        }
         if (srcSo != null) {
             dstDir.mkdirs()
             java.nio.file.Files.copy(
@@ -92,11 +98,6 @@ abstract class BuildTask : DefaultTask() {
             )
             println("PhoneDeck BuildTask: copied fresh $srcSo to $dstSo (${dstSo.length()} bytes)")
             return dstSo.exists() && dstSo.length() > 0
-        }
-
-        if (dstSo.exists() && dstSo.length() > 0) {
-            println("PhoneDeck BuildTask: using existing jniLibs so at $dstSo (${dstSo.length()} bytes)")
-            return true
         }
         println("PhoneDeck BuildTask: no candidate .so found for $triple/$profile in $candidateLocations")
         return false
