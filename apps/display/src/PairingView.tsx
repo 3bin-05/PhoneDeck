@@ -69,22 +69,41 @@ export const PairingView: React.FC<PairingViewProps> = ({
     setStatusMessage(null);
     try {
       setIsScanning(true);
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+        });
+      } catch (err) {
+        console.warn('Ideal camera constraints failed, attempting fallback to basic video:', err);
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+        });
+      }
+
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.setAttribute('playsinline', 'true');
+        videoRef.current.setAttribute('autoplay', 'true');
+        videoRef.current.setAttribute('muted', 'true');
         await videoRef.current.play();
 
-        // Start scanning loop
-        scanIntervalRef.current = window.setInterval(scanFrame, 250);
+        // Start scanning loop (5 scans per second)
+        scanIntervalRef.current = window.setInterval(scanFrame, 200);
       }
     } catch (err: any) {
       console.error('Camera access error:', err);
       setStatusType('error');
-      setStatusMessage('Camera access denied or unavailable. You can paste the link instead.');
+      if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
+        setStatusMessage('Camera permission was denied. Please grant Camera permission in Android Settings or paste the pairing link.');
+      } else {
+        setStatusMessage(`Camera unavailable (${err?.name || err?.message || 'Error'}). You can paste the link directly.`);
+      }
       stopCamera();
     }
   };
@@ -92,7 +111,8 @@ export const PairingView: React.FC<PairingViewProps> = ({
   const scanFrame = () => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    if (!video || !canvas || video.readyState !== video.HAVE_ENOUGH_DATA) return;
+    if (!video || !canvas) return;
+    if (video.videoWidth === 0 || video.videoHeight === 0) return;
 
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
@@ -103,7 +123,7 @@ export const PairingView: React.FC<PairingViewProps> = ({
 
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const code = jsQR(imageData.data, imageData.width, imageData.height, {
-      inversionAttempts: 'dontInvert',
+      inversionAttempts: 'attemptBoth',
     });
 
     if (code && code.data) {
@@ -135,7 +155,9 @@ export const PairingView: React.FC<PairingViewProps> = ({
 
         ctx.drawImage(img, 0, 0);
         const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imgData.data, imgData.width, imgData.height);
+        const code = jsQR(imgData.data, imgData.width, imgData.height, {
+          inversionAttempts: 'attemptBoth',
+        });
 
         if (code && code.data.startsWith('phonedeck://pair')) {
           setPairingUri(code.data);

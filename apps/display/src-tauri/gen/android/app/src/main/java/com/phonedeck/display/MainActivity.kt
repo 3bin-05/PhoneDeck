@@ -1,9 +1,15 @@
 package com.phonedeck.display
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.view.WindowManager
+import android.webkit.PermissionRequest
+import android.webkit.WebChromeClient
+import android.webkit.WebView
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -13,6 +19,51 @@ class MainActivity : TauriActivity() {
     super.onCreate(savedInstanceState)
     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     hideSystemUI()
+
+    // Proactively request camera permission on launch if not yet granted
+    if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+      requestPermissions(arrayOf(Manifest.permission.CAMERA)) { _ -> }
+    }
+  }
+
+  override fun onWebViewCreate(webView: WebView) {
+    super.onWebViewCreate(webView)
+    webView.webChromeClient = object : WebChromeClient() {
+      override fun onPermissionRequest(request: PermissionRequest) {
+        val requestedResources = request.resources
+        var needsCamera = false
+        for (resource in requestedResources) {
+          if (resource == PermissionRequest.RESOURCE_VIDEO_CAPTURE) {
+            needsCamera = true
+            break
+          }
+        }
+
+        if (needsCamera) {
+          if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            runOnUiThread {
+              request.grant(requestedResources)
+            }
+          } else {
+            runOnUiThread {
+              requestPermissions(arrayOf(Manifest.permission.CAMERA)) { granted ->
+                runOnUiThread {
+                  if (granted == true) {
+                    request.grant(requestedResources)
+                  } else {
+                    request.deny()
+                  }
+                }
+              }
+            }
+          }
+        } else {
+          runOnUiThread {
+            request.grant(requestedResources)
+          }
+        }
+      }
+    }
   }
 
   override fun onWindowFocusChanged(hasFocus: Boolean) {
