@@ -1,6 +1,6 @@
 [package]
 name = "agent"
-version = "0.1.0"
+version = "0.1.1"
 description = "Phone Deck Agent Desktop Application"
 authors = ["Phone Deck"]
 edition = "2021"
