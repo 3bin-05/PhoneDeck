@@ -714,6 +714,36 @@ impl AppRegistryManager {
         self.is_paused.store(paused, Ordering::SeqCst);
     }
 
+    pub fn spawn_app_process(app: &AppDefinition) -> Result<(), String> {
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            let mut cmd = Command::new(&app.launch.path);
+            for arg in &app.launch.args {
+                cmd.arg(arg);
+            }
+            if cmd.spawn().is_err() {
+                let mut shell_cmd = Command::new("cmd");
+                shell_cmd.args(["/C", "start", "", &app.launch.path]);
+                for arg in &app.launch.args {
+                    shell_cmd.arg(arg);
+                }
+                shell_cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+                shell_cmd.spawn().map_err(|e| format!("Failed to launch {}: {}", app.name, e))?;
+            }
+            Ok(())
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let mut cmd = Command::new(&app.launch.path);
+            for arg in &app.launch.args {
+                cmd.arg(arg);
+            }
+            cmd.spawn().map_err(|e| format!("Failed to launch {}: {}", app.name, e))?;
+            Ok(())
+        }
+    }
+
     /// Executes an app action (focus, launch, new_window, close_window, quit, quick_launch)
     pub async fn execute_action(
         &self,
@@ -737,11 +767,7 @@ impl AppRegistryManager {
 
         match action {
             "launch" => {
-                let mut cmd = Command::new(&app.launch.path);
-                for arg in &app.launch.args {
-                    cmd.arg(arg);
-                }
-                cmd.spawn().map_err(|e| format!("Failed to launch {}: {}", app.name, e))?;
+                Self::spawn_app_process(&app)?;
                 Ok(format!("Launched {}", app.name))
             }
             "focus" => {
@@ -775,11 +801,7 @@ impl AppRegistryManager {
                         }
                     } else {
                         // Not running or has no visible window: launch it
-                        let mut cmd = Command::new(&app.launch.path);
-                        for arg in &app.launch.args {
-                            cmd.arg(arg);
-                        }
-                        cmd.spawn().map_err(|e| format!("Failed to launch {}: {}", app.name, e))?;
+                        Self::spawn_app_process(&app)?;
                         Ok(format!("Launched {}", app.name))
                     }
                 }
