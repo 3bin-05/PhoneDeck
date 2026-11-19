@@ -4,7 +4,6 @@ import {
   Pause,
   SkipBack,
   SkipForward,
-  Sparkles,
 } from 'lucide-react';
 import { useDeckStore, useEvents } from './deckStore';
 import {
@@ -13,6 +12,11 @@ import {
   sendAppAction,
   sendDeckMessage,
 } from './useDeckBridge';
+
+import antigravityLogo from './assets/logos/antigravity.webp';
+import claudeLogo from './assets/logos/claude.webp';
+import vscodeLogo from './assets/logos/vscode.webp';
+import spotifyLogo from './assets/logos/spotify.webp';
 
 // 5x7 Dot Matrix digit definitions for authentic LED matrix clock display
 const DOT_PATTERNS: Record<string, number[][]> = {
@@ -610,7 +614,7 @@ export function MainDeckView() {
               className="mt-2 flex items-center justify-between gap-2 px-3.5 py-2 rounded-xl bg-white/[0.04] border border-white/10 hover:border-white/20 transition-all cursor-pointer"
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <Sparkles className="w-3.5 h-3.5 text-white shrink-0" />
+                <img src={claudeLogo} alt="Claude" className="w-3.5 h-3.5 object-contain shrink-0" />
                 <span className="text-xs font-mono text-zinc-200 truncate">
                   {activeEvent
                     ? `${activeEvent.agent} · ${activeEvent.project} · ${activeEvent.summary}`
@@ -632,18 +636,11 @@ export function MainDeckView() {
               className="bg-[#0D0D10] border border-white/[0.08] hover:border-white/30 active:scale-95 transition-all rounded-2xl p-3 flex flex-col items-center justify-center gap-2 cursor-pointer shadow-md group"
               title="Launch VS Code on Laptop"
             >
-              <svg
-                className="w-6 h-6 text-white group-hover:scale-110 transition-transform"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polyline points="16 18 22 12 16 6" />
-                <polyline points="8 6 2 12 8 18" />
-              </svg>
+              <img
+                src={vscodeLogo}
+                alt="VS Code"
+                className="w-6 h-6 object-contain group-hover:scale-110 transition-transform"
+              />
               <div className="w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_6px_#ffffff]" />
             </button>
 
@@ -672,13 +669,11 @@ export function MainDeckView() {
               className="bg-[#0D0D10] border border-white/[0.08] hover:border-white/30 active:scale-95 transition-all rounded-2xl p-3 flex flex-col items-center justify-center gap-2 cursor-pointer shadow-md group"
               title="Launch Antigravity on Laptop"
             >
-              <svg
-                className="w-6 h-6 text-white group-hover:scale-110 transition-transform"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
-                <path d="M12 2L2 20h20L12 2zm0 5l6.5 11h-13L12 7z" />
-              </svg>
+              <img
+                src={antigravityLogo}
+                alt="Antigravity"
+                className="w-6 h-6 object-contain group-hover:scale-110 transition-transform"
+              />
               <div className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
             </button>
 
@@ -688,20 +683,11 @@ export function MainDeckView() {
               className="bg-[#0D0D10] border border-white/[0.08] hover:border-white/30 active:scale-95 transition-all rounded-2xl p-3 flex flex-col items-center justify-center gap-2 cursor-pointer shadow-md group"
               title="Launch Spotify on Laptop"
             >
-              <svg
-                className="w-6 h-6 text-white group-hover:scale-110 transition-transform"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
-                <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" />
-                <path
-                  d="M7 9.5c3.5-1 7.5-.7 10.5.8M7.5 12.5c2.8-.8 6.2-.5 8.7.8M8 15.5c2.2-.6 4.8-.4 6.8.6"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
+              <img
+                src={spotifyLogo}
+                alt="Spotify"
+                className="w-6 h-6 object-contain group-hover:scale-110 transition-transform"
+              />
               <div className="w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_6px_#ffffff]" />
             </button>
 
