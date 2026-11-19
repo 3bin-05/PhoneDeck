@@ -254,6 +254,8 @@ pub fn run() {
                                     let _ = window.show();
                                     let _ = window.unminimize();
                                     let _ = window.set_focus();
+                                    #[cfg(windows)]
+                                    apply_windows_taskbar_and_window_icons(&window);
                                 }
                             }
                         }
@@ -278,6 +280,8 @@ pub fn run() {
                     if let Ok(icon) = tauri::image::Image::from_bytes(include_bytes!("../icons/128x128.png")) {
                         let _ = window.set_icon(icon);
                     }
+                    #[cfg(windows)]
+                    apply_windows_taskbar_and_window_icons(&window);
                 }
             }
 
@@ -325,4 +329,105 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");
+}
+
+#[cfg(windows)]
+fn apply_windows_taskbar_and_window_icons(window: &tauri::WebviewWindow) {
+    type HWND = *mut std::ffi::c_void;
+    type HICON = *mut std::ffi::c_void;
+    type HINSTANCE = *mut std::ffi::c_void;
+    type WPARAM = usize;
+    type LPARAM = isize;
+    type LRESULT = isize;
+
+    const WM_SETICON: u32 = 0x0080;
+    const ICON_SMALL: WPARAM = 0;
+    const ICON_BIG: WPARAM = 1;
+    const GCLP_HICON: i32 = -14;
+    const GCLP_HICONSM: i32 = -34;
+    const IMAGE_ICON: u32 = 1;
+    const LR_DEFAULTCOLOR: u32 = 0x0000;
+
+    extern "system" {
+        fn SendMessageW(hWnd: HWND, Msg: u32, wParam: WPARAM, lParam: LPARAM) -> LRESULT;
+        fn SetClassLongPtrW(hWnd: HWND, nIndex: i32, dwNewLong: isize) -> usize;
+        fn CreateIconFromResourceEx(
+            pbIconBits: *const u8,
+            cbIconBits: u32,
+            fIcon: i32,
+            dwVersion: u32,
+            cxDesired: i32,
+            cyDesired: i32,
+            uFlags: u32,
+        ) -> HICON;
+        fn GetModuleHandleW(lpModuleName: *const u16) -> HINSTANCE;
+        fn LoadImageW(
+            hInst: HINSTANCE,
+            name: *const u16,
+            type_: u32,
+            cx: i32,
+            cy: i32,
+            fuLoad: u32,
+        ) -> HICON;
+    }
+
+    if let Ok(raw_hwnd) = window.hwnd() {
+        let hwnd = raw_hwnd.0 as HWND;
+        let png_bytes = include_bytes!("../icons/128x128.png");
+
+        unsafe {
+            let mut hicon_big = CreateIconFromResourceEx(
+                png_bytes.as_ptr(),
+                png_bytes.len() as u32,
+                1,
+                0x00030000,
+                32,
+                32,
+                LR_DEFAULTCOLOR,
+            );
+            if hicon_big.is_null() {
+                let hinst = GetModuleHandleW(std::ptr::null());
+                hicon_big = LoadImageW(
+                    hinst,
+                    32512 as usize as *const u16,
+                    IMAGE_ICON,
+                    32,
+                    32,
+                    LR_DEFAULTCOLOR,
+                );
+            }
+
+            let mut hicon_small = CreateIconFromResourceEx(
+                png_bytes.as_ptr(),
+                png_bytes.len() as u32,
+                1,
+                0x00030000,
+                16,
+                16,
+                LR_DEFAULTCOLOR,
+            );
+            if hicon_small.is_null() {
+                let hinst = GetModuleHandleW(std::ptr::null());
+                hicon_small = LoadImageW(
+                    hinst,
+                    32512 as usize as *const u16,
+                    IMAGE_ICON,
+                    16,
+                    16,
+                    LR_DEFAULTCOLOR,
+                );
+            }
+
+            if !hicon_big.is_null() {
+                SendMessageW(hwnd, WM_SETICON, ICON_BIG, hicon_big as LPARAM);
+                SetClassLongPtrW(hwnd, GCLP_HICON, hicon_big as isize);
+                log::info!("[Agent] Win32 WM_SETICON ICON_BIG applied successfully");
+            }
+            if !hicon_small.is_null() {
+                SendMessageW(hwnd, WM_SETICON, ICON_SMALL, hicon_small as LPARAM);
+                SetClassLongPtrW(hwnd, GCLP_HICONSM, hicon_small as isize);
+                log::info!("[Agent] Win32 WM_SETICON ICON_SMALL applied successfully");
+            }
+        }
+    }
 }

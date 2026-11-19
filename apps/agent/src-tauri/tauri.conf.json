@@ -12,6 +12,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Phone Deck Agent",
         "width": 1040,
         "height": 720,
