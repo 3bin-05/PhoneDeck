@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { AgentEvent } from '@phone-deck/ui-kit';
 import {
   type ThemeConfig,
-  VOID_THEME,
+  GLASS_THEME,
   DEFAULT_DECK_CONFIG,
   type DeckConfiguration,
 } from '@phone-deck/theme-engine';
@@ -160,7 +160,7 @@ export const useDeckStore = create<DeckState>((set) => ({
     tickRateHz: 2.0,
     frameTimeMs: 3.2,
   },
-  theme: VOID_THEME,
+  theme: GLASS_THEME,
   deckConfig: DEFAULT_DECK_CONFIG,
 
   setTheme: (theme) => set({ theme }),

@@ -227,58 +227,66 @@ export const PairingView: React.FC<PairingViewProps> = ({
   // View: Paired but waiting for PC to connect
   if (paired && !connected) {
     return (
-      <div className="w-full h-screen bg-[#07070A] text-[#EDEDF2] flex flex-col items-center justify-center p-6 font-mono select-none">
-        <div className="max-w-md w-full bg-[#0D0D14] border border-white/[0.08] rounded-2xl p-6 text-center space-y-6 shadow-2xl relative overflow-hidden">
+      <div className="w-full h-screen relative flex flex-col items-center justify-center p-6 font-sans select-none overflow-hidden">
+        {/* Warm Studio Bokeh Background */}
+        <img
+          src="/glass-bokeh-bg.jpg"
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
+        />
+        <div className="absolute inset-0 bg-black/40 backdrop-blur-md pointer-events-none" />
+
+        <div className="max-w-md w-full bg-white/[0.08] backdrop-blur-2xl border border-white/[0.16] rounded-2xl p-6 text-center space-y-6 shadow-[0_16px_40px_rgba(0,0,0,0.4)] relative overflow-hidden z-10">
           {/* Ambient Glow */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-24 bg-[#7C5CFF]/15 blur-3xl pointer-events-none rounded-full" />
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-24 bg-[#B07BFF]/20 blur-3xl pointer-events-none rounded-full" />
 
           {/* Wi-Fi Radar pulsing icon */}
           <div className="relative mx-auto w-16 h-16 flex items-center justify-center">
-            <div className="absolute inset-0 rounded-full bg-[#7C5CFF]/20 animate-ping opacity-50" />
-            <div className="w-12 h-12 rounded-full bg-[#7C5CFF]/20 border border-[#7C5CFF]/40 flex items-center justify-center text-[#7C5CFF]">
+            <div className="absolute inset-0 rounded-full bg-[#B07BFF]/20 animate-ping opacity-50" />
+            <div className="w-12 h-12 rounded-full bg-[#B07BFF]/20 border border-[#B07BFF]/40 flex items-center justify-center text-[#B07BFF]">
               <Wifi className="w-6 h-6 animate-pulse" />
             </div>
           </div>
 
           <div className="space-y-2">
-            <h1 className="text-lg font-bold tracking-wider text-white uppercase">
+            <h1 className="text-lg font-bold tracking-wider text-white uppercase font-mono">
               Connecting to PC...
             </h1>
-            <p className="text-xs text-[#71717A] leading-relaxed">
-              Searching for <span className="text-[#EDEDF2] font-semibold">{agentId || 'Phone Deck Agent'}</span> on your local Wi-Fi.
+            <p className="text-xs text-zinc-300 leading-relaxed font-sans">
+              Searching for <span className="text-white font-semibold">{agentId || 'Phone Deck Agent'}</span> on your local Wi-Fi.
             </p>
             {activeHost && (
-              <div className="inline-block px-2.5 py-1 rounded bg-white/[0.04] text-[11px] text-[#A1A1AA] border border-white/[0.06]">
+              <div className="inline-block px-2.5 py-1 rounded bg-white/[0.06] text-[11px] text-zinc-300 border border-white/[0.1] font-mono">
                 Target: {activeHost}
               </div>
             )}
           </div>
 
           {error && (
-            <div className="p-2.5 rounded-lg bg-[#FF3B5C]/10 border border-[#FF3B5C]/20 text-[#FF3B5C] text-xs flex items-center gap-2 text-left">
+            <div className="p-2.5 rounded-lg bg-[#FF3B5C]/15 border border-[#FF3B5C]/30 text-[#FF6680] text-xs flex items-center gap-2 text-left font-mono">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           <div className="pt-2 space-y-3">
-            <div className="flex items-center justify-center gap-2 text-[11px] text-[#71717A]">
-              <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#7C5CFF]" />
+            <div className="flex items-center justify-center gap-2 text-[11px] text-zinc-400 font-mono">
+              <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#B07BFF]" />
               <span>Auto-reconnecting every 3s</span>
             </div>
 
             <div className="grid grid-cols-2 gap-2 pt-2">
               <button
                 onClick={onUnpair}
-                className="py-2.5 px-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-xs text-[#A1A1AA] hover:text-white border border-white/[0.08] transition-all cursor-pointer font-medium"
+                className="py-2.5 px-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-xs text-zinc-300 hover:text-white border border-white/[0.1] transition-all cursor-pointer font-medium font-sans"
               >
                 Unpair / New PC
               </button>
               <button
                 onClick={onEnterDemo}
-                className="py-2.5 px-3 rounded-xl bg-[#7C5CFF]/20 hover:bg-[#7C5CFF]/30 text-xs text-[#A78BFA] hover:text-white border border-[#7C5CFF]/30 transition-all cursor-pointer font-medium flex items-center justify-center gap-1.5"
+                className="py-2.5 px-3 rounded-xl bg-[#B07BFF]/20 hover:bg-[#B07BFF]/30 text-xs text-[#D8B4FE] hover:text-white border border-[#B07BFF]/40 transition-all cursor-pointer font-medium flex items-center justify-center gap-1.5 font-sans"
               >
-                <Sparkles className="w-3.5 h-3.5" />
+                <Sparkles className="w-3.5 h-3.5 text-[#B07BFF]" />
                 <span>Demo Mode</span>
               </button>
             </div>
@@ -290,16 +298,24 @@ export const PairingView: React.FC<PairingViewProps> = ({
 
   // View: Unpaired / Setup Flow
   return (
-    <div className="w-full h-screen bg-[#07070A] text-[#EDEDF2] flex flex-col items-center justify-center p-4 md:p-8 font-sans select-none overflow-y-auto">
+    <div className="w-full h-screen relative flex flex-col items-center justify-center p-4 md:p-8 font-sans select-none overflow-y-auto">
+      {/* Warm Studio Bokeh Background */}
+      <img
+        src="/glass-bokeh-bg.jpg"
+        alt=""
+        className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
+      />
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-md pointer-events-none" />
+
       {/* Hidden canvas for QR image decoding */}
       <canvas ref={canvasRef} className="hidden" />
 
       {/* Camera Fullscreen Modal */}
       {isScanning && (
-        <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-between p-4">
+        <div className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-between p-4">
           <div className="w-full flex items-center justify-between text-white font-mono text-xs z-10">
             <span className="flex items-center gap-1.5">
-              <Camera className="w-4 h-4 text-[#7C5CFF]" />
+              <Camera className="w-4 h-4 text-[#B07BFF]" />
               Point at QR Code on PC Screen
             </span>
             <button
@@ -310,7 +326,7 @@ export const PairingView: React.FC<PairingViewProps> = ({
             </button>
           </div>
 
-          <div className="relative w-full max-w-sm aspect-square my-auto flex items-center justify-center overflow-hidden rounded-2xl border-2 border-[#7C5CFF]/50 shadow-[0_0_30px_rgba(124,92,255,0.3)]">
+          <div className="relative w-full max-w-sm aspect-square my-auto flex items-center justify-center overflow-hidden rounded-2xl border-2 border-[#B07BFF]/50 shadow-[0_0_30px_rgba(176,123,255,0.4)]">
             <video
               ref={videoRef}
               className="w-full h-full object-cover"
@@ -319,10 +335,10 @@ export const PairingView: React.FC<PairingViewProps> = ({
               muted
             />
             {/* Viewfinder target box */}
-            <div className="absolute inset-8 border-2 border-dashed border-[#00E599] rounded-xl pointer-events-none animate-pulse" />
+            <div className="absolute inset-8 border-2 border-dashed border-[#B07BFF] rounded-xl pointer-events-none animate-pulse" />
           </div>
 
-          <div className="w-full max-w-sm text-center text-xs font-mono text-[#A1A1AA] space-y-2 z-10 pb-4">
+          <div className="w-full max-w-sm text-center text-xs font-mono text-zinc-300 space-y-2 z-10 pb-4">
             <p>Ensure the QR code on your PC monitor is fully inside the frame</p>
             <button
               onClick={stopCamera}
@@ -335,19 +351,19 @@ export const PairingView: React.FC<PairingViewProps> = ({
       )}
 
       {/* Main Pairing Card */}
-      <div className="max-w-lg w-full bg-[#0D0D14] border border-white/[0.08] rounded-2xl p-6 md:p-8 shadow-2xl relative space-y-6">
+      <div className="max-w-lg w-full bg-white/[0.08] backdrop-blur-2xl border border-white/[0.16] rounded-2xl p-6 md:p-8 shadow-[0_16px_40px_rgba(0,0,0,0.4)] relative space-y-6 z-10">
         {/* Glow */}
-        <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-64 h-32 bg-[#7C5CFF]/15 blur-3xl pointer-events-none rounded-full" />
+        <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-64 h-32 bg-[#B07BFF]/20 blur-3xl pointer-events-none rounded-full" />
 
         {/* Brand Header */}
-        <div className="flex items-center justify-between border-b border-white/[0.08] pb-4">
+        <div className="flex items-center justify-between border-b border-white/[0.1] pb-4">
           <div className="flex items-center gap-3">
-            <div className="w-3 h-3 rounded-full bg-[#7C5CFF] shadow-[0_0_12px_#7C5CFF]" />
+            <div className="w-3 h-3 rounded-full bg-[#B07BFF] shadow-[0_0_12px_#B07BFF]" />
             <div>
               <h1 className="text-base font-bold tracking-wider text-white font-mono uppercase">
-                PHONE DECK <span className="text-[#7C5CFF]">DISPLAY</span>
+                PHONE DECK <span className="text-[#B07BFF]">DISPLAY</span>
               </h1>
-              <p className="text-[11px] text-[#71717A] font-mono">
+              <p className="text-[11px] text-zinc-300 font-mono">
                 Steam-Deck Style Companion Screen
               </p>
             </div>
@@ -355,18 +371,18 @@ export const PairingView: React.FC<PairingViewProps> = ({
 
           <button
             onClick={onEnterDemo}
-            className="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-[11px] font-mono text-[#A78BFA] border border-white/[0.06] flex items-center gap-1.5 transition-all cursor-pointer"
+            className="px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-[11px] font-mono text-[#D8B4FE] border border-white/[0.1] flex items-center gap-1.5 transition-all cursor-pointer"
             title="Preview dashboard with mock data without connecting to a PC"
           >
-            <Sparkles className="w-3 h-3" />
+            <Sparkles className="w-3 h-3 text-[#B07BFF]" />
             <span>Try Demo</span>
           </button>
         </div>
 
         {/* Instructions */}
         <div className="space-y-1.5">
-          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#7C5CFF]/10 text-[#7C5CFF] text-[10px] font-mono font-medium border border-[#7C5CFF]/20">
-            <Shield className="w-3 h-3" />
+          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#B07BFF]/15 text-[#D8B4FE] text-[10px] font-mono font-medium border border-[#B07BFF]/30">
+            <Shield className="w-3 h-3 text-[#B07BFF]" />
             LOCAL WI-FI ONLY · ZERO CLOUD · PINNED TLS
           </div>
           <h2 className="text-sm font-semibold text-[#EDEDF2]">

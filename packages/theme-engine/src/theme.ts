@@ -55,6 +55,53 @@ export interface ThemeConfig {
 }
 
 /**
+ * 0. Flagship Theme: "Deck Glass" (Frosted Glassmorphism, Warm Studio Bokeh, Lavender Accents)
+ */
+export const GLASS_THEME: ThemeConfig = {
+  name: 'glass',
+  version: '1.0',
+  background: {
+    type: 'wallpaper',
+    ref: 'glass-bokeh',
+    dim: 0.2,
+  },
+  palette: {
+    accent: '#B07BFF',
+    surface: 'rgba(255, 255, 255, 0.08)',
+    surfaceSubtle: 'rgba(255, 255, 255, 0.05)',
+    surfaceCard: 'rgba(255, 255, 255, 0.09)',
+    text: '#FFFFFF',
+    textMuted: '#A1A1AA',
+    border: 'rgba(255, 255, 255, 0.14)',
+    success: '#00E599',
+    warning: '#FFB800',
+    danger: '#FF3B5C',
+  },
+  type: {
+    display: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    mono: 'ui-monospace, SFMono-Regular, "Roboto Mono", Menlo, monospace',
+  },
+  shape: {
+    radius: 18,
+    blur: 24,
+    glow: 0.6,
+  },
+  widgets: {
+    defaultStyle: 'glass',
+  },
+  schedule: {
+    night: '22:00',
+    day: '06:00',
+  },
+  skin: {
+    image: null,
+    frames: {},
+    font: null,
+    accent: null,
+  },
+};
+
+/**
  * 1. Default Built-in Theme: "Void" (True Black OLED, Electric Violet, Hairline borders)
  */
 export const VOID_THEME: ThemeConfig = {
@@ -196,6 +243,7 @@ export const NEON_GRID_THEME: ThemeConfig = {
 };
 
 export const BUILTIN_THEMES: Record<string, ThemeConfig> = {
+  glass: GLASS_THEME,
   void: VOID_THEME,
   paper: PAPER_THEME,
   'neon-grid': NEON_GRID_THEME,

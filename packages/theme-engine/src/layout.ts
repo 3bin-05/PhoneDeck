@@ -1,4 +1,4 @@
-import { type ThemeConfig, VOID_THEME, computeConfigHash } from './theme';
+import { type ThemeConfig, GLASS_THEME, computeConfigHash } from './theme';
 
 export interface PlacedWidget {
   instanceId: string;
@@ -201,8 +201,8 @@ export const STARTER_TEMPLATES: Record<string, DeckPage> = {
 
 export const DEFAULT_DECK_CONFIG: DeckConfiguration = {
   version: '1.0',
-  activeThemeName: 'void',
-  theme: VOID_THEME,
+  activeThemeName: 'glass',
+  theme: GLASS_THEME,
   pages: [
     STARTER_TEMPLATES.systemOverview,
     STARTER_TEMPLATES.developerHub,
@@ -210,7 +210,7 @@ export const DEFAULT_DECK_CONFIG: DeckConfiguration = {
   ],
   activePageIndex: 0,
   contentHash: computeConfigHash({
-    theme: VOID_THEME,
+    theme: GLASS_THEME,
     pages: [
       STARTER_TEMPLATES.systemOverview,
       STARTER_TEMPLATES.developerHub,

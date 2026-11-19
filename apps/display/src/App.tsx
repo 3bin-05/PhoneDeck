@@ -17,6 +17,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { PairingView } from './PairingView';
+import { GlassDashboardView } from './GlassDashboardView';
 import { useUpdaterStore } from './updaterStore';
 import {
   useDeckStore,
@@ -271,7 +272,7 @@ export default function App() {
         backgroundColor: theme.palette.surface,
         color: theme.palette.text,
       }}
-      className="w-full h-screen flex flex-col select-none overflow-hidden font-sans"
+      className={`w-full h-screen flex flex-col select-none overflow-hidden font-sans theme-${theme.name}`}
     >
       {/* Peek Mode Banner */}
       {ambientState === 'peek' && (
@@ -305,148 +306,150 @@ export default function App() {
         </div>
       )}
 
-      {/* Top Header Bar */}
-      <header
-        style={{
-          backgroundColor: `${theme.palette.surface}F0`,
-          borderColor: theme.palette.border,
-        }}
-        className="h-10 px-4 border-b flex items-center justify-between text-xs font-mono shrink-0 z-20"
-      >
-        <div className="flex items-center space-x-2">
-          <div
-            className="w-2.5 h-2.5 rounded-full"
-            style={{
-              backgroundColor: theme.palette.accent,
-              boxShadow: `0 0 8px ${theme.palette.accent}`,
-            }}
-          />
-          <span className="font-semibold tracking-wider">
-            PHONE DECK
-          </span>
-          <button
-            onClick={() => {
-              const themes = Object.values(BUILTIN_THEMES);
-              const currIdx = themes.findIndex((t) => t.name === theme.name);
-              const nextTheme = themes[(currIdx + 1) % themes.length];
-              useDeckStore.getState().setTheme(nextTheme);
-            }}
-            className="text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded transition-all cursor-pointer"
-            style={{
-              backgroundColor: `${theme.palette.accent}20`,
-              color: theme.palette.accent,
-              border: `1px solid ${theme.palette.accent}40`,
-            }}
-            title="Click to cycle theme (Void / Paper / Neon Grid)"
-          >
-            {theme.name}
-          </button>
-          <button
-            onClick={() => {
-              const wallpapers = Object.keys(BUILTIN_WALLPAPERS);
-              const currKey = theme.background?.ref || 'aurora-lite';
-              const nextIdx = (wallpapers.indexOf(currKey) + 1) % wallpapers.length;
-              const nextKey = wallpapers[nextIdx];
-              useDeckStore.getState().setTheme({
-                ...theme,
-                background: {
-                  type: 'wallpaper',
-                  ref: nextKey,
-                  dim: theme.background?.dim ?? 0.35,
-                },
-              });
-            }}
-            className="text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded transition-all cursor-pointer bg-white/[0.04] text-zinc-400 hover:text-white border border-white/[0.08]"
-            title="Click to cycle Live Wallpaper preset (Aurora / Flow / Starfield / Nebula / Grid / Particles)"
-          >
-            WP: {theme.background?.ref?.replace('-lite', '') || 'aurora'}
-          </button>
-        </div>
-
-        {/* Center Page Title & Overview Trigger */}
-        <div className="flex items-center space-x-2 text-[11px] text-[#71717A]">
-          <button
-            onClick={() => useDeckStore.getState().prevPage()}
-            className="hover:text-[#EDEDF2] transition-colors p-1"
-          >
-            <ChevronLeft className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => setShowOverview(true)}
-            className="uppercase tracking-wider text-[#EDEDF2] font-medium hover:text-[#7C5CFF] flex items-center gap-1.5 transition-colors cursor-pointer px-2 py-0.5 rounded hover:bg-white/[0.04]"
-            title="Click to view All Pages Overview"
-          >
-            <Layers className="w-3 h-3 text-[#7C5CFF]" />
-            <span>
-              {activePage === 0 && 'Page 1 · System Overview'}
-              {activePage === 1 && 'Page 2 · Dev & Processes'}
-              {activePage === 2 && 'Page 3 · Audio & Media'}
-              {activePage === 3 && 'Page 4 · AI Agents & Quotas'}
+      {/* Top Header Bar (Discreet or hidden on Page 0 in Glass theme) */}
+      {!(theme.name === 'glass' && activePage === 0) && (
+        <header
+          style={{
+            backgroundColor: `${theme.palette.surface}F0`,
+            borderColor: theme.palette.border,
+          }}
+          className="h-10 px-4 border-b flex items-center justify-between text-xs font-mono shrink-0 z-20 backdrop-blur-md"
+        >
+          <div className="flex items-center space-x-2">
+            <div
+              className="w-2.5 h-2.5 rounded-full"
+              style={{
+                backgroundColor: theme.palette.accent,
+                boxShadow: `0 0 8px ${theme.palette.accent}`,
+              }}
+            />
+            <span className="font-semibold tracking-wider">
+              PHONE DECK
             </span>
-          </button>
-          <button
-            onClick={() => useDeckStore.getState().nextPage()}
-            className="hover:text-[#EDEDF2] transition-colors p-1"
-          >
-            <ChevronRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
+            <button
+              onClick={() => {
+                const themes = Object.values(BUILTIN_THEMES);
+                const currIdx = themes.findIndex((t) => t.name === theme.name);
+                const nextTheme = themes[(currIdx + 1) % themes.length];
+                useDeckStore.getState().setTheme(nextTheme);
+              }}
+              className="text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded transition-all cursor-pointer"
+              style={{
+                backgroundColor: `${theme.palette.accent}20`,
+                color: theme.palette.accent,
+                border: `1px solid ${theme.palette.accent}40`,
+              }}
+              title="Click to cycle theme (Glass / Void / Paper / Neon Grid)"
+            >
+              {theme.name}
+            </button>
+            <button
+              onClick={() => {
+                const wallpapers = Object.keys(BUILTIN_WALLPAPERS);
+                const currKey = theme.background?.ref || 'glass-bokeh';
+                const nextIdx = (wallpapers.indexOf(currKey) + 1) % wallpapers.length;
+                const nextKey = wallpapers[nextIdx];
+                useDeckStore.getState().setTheme({
+                  ...theme,
+                  background: {
+                    type: 'wallpaper',
+                    ref: nextKey,
+                    dim: theme.background?.dim ?? 0.35,
+                  },
+                });
+              }}
+              className="text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded transition-all cursor-pointer bg-white/[0.04] text-zinc-400 hover:text-white border border-white/[0.08]"
+              title="Click to cycle Live Wallpaper preset"
+            >
+              WP: {theme.background?.ref?.replace('-lite', '') || 'glass-bokeh'}
+            </button>
+          </div>
 
-        {/* Action icons */}
-        <div className="flex items-center space-x-2">
-          {/* Pairing status button */}
-          <button
-            onClick={() => {
-              if (isDemoMode) {
-                setIsDemoMode(false);
-              } else {
-                setShowPairModal(true);
-              }
-            }}
-            className={`flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] border transition-colors ${
-              connected
-                ? 'bg-[#00E599]/10 border-[#00E599]/30 text-[#00E599]'
-                : isDemoMode
-                ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
-                : 'bg-white/[0.04] border-white/[0.08] text-[#71717A] hover:text-[#EDEDF2]'
-            }`}
-          >
-            <Shield className="w-3 h-3" />
-            <span>
-              {connected
-                ? `LIVE TLS${connectionStatus.active_host ? ` · ${connectionStatus.active_host.split(':')[0]}` : ''}`
-                : isDemoMode
-                ? 'DEMO (MOCK)'
-                : 'OFFLINE'}
-            </span>
-          </button>
+          {/* Center Page Title & Overview Trigger */}
+          <div className="flex items-center space-x-2 text-[11px] text-[#71717A]">
+            <button
+              onClick={() => useDeckStore.getState().prevPage()}
+              className="hover:text-[#EDEDF2] transition-colors p-1"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setShowOverview(true)}
+              className="uppercase tracking-wider text-[#EDEDF2] font-medium hover:text-[#B07BFF] flex items-center gap-1.5 transition-colors cursor-pointer px-2 py-0.5 rounded hover:bg-white/[0.04]"
+              title="Click to view All Pages Overview"
+            >
+              <Layers className="w-3 h-3 text-[#B07BFF]" />
+              <span>
+                {activePage === 0 && 'Page 1 · System Overview'}
+                {activePage === 1 && 'Page 2 · Dev & Processes'}
+                {activePage === 2 && 'Page 3 · Audio & Media'}
+                {activePage === 3 && 'Page 4 · AI Agents & Quotas'}
+              </span>
+            </button>
+            <button
+              onClick={() => useDeckStore.getState().nextPage()}
+              className="hover:text-[#EDEDF2] transition-colors p-1"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
 
-          {/* Budget HUD toggle */}
-          <button
-            onClick={() => setShowBudgetHud(!showBudgetHud)}
-            className={`p-1.5 rounded transition-colors ${
-              showBudgetHud
-                ? 'bg-[#7C5CFF] text-white'
-                : 'bg-white/[0.04] text-[#71717A] hover:text-[#EDEDF2]'
-            }`}
-            title="Toggle Section 10 Budget HUD"
-          >
-            <Gauge className="w-3.5 h-3.5" />
-          </button>
+          {/* Action icons */}
+          <div className="flex items-center space-x-2">
+            {/* Pairing status button */}
+            <button
+              onClick={() => {
+                if (isDemoMode) {
+                  setIsDemoMode(false);
+                } else {
+                  setShowPairModal(true);
+                }
+              }}
+              className={`flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] border transition-colors ${
+                connected
+                  ? 'bg-[#B07BFF]/10 border-[#B07BFF]/30 text-[#B07BFF]'
+                  : isDemoMode
+                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+                  : 'bg-white/[0.04] border-white/[0.08] text-[#71717A] hover:text-[#EDEDF2]'
+              }`}
+            >
+              <Shield className="w-3 h-3" />
+              <span>
+                {connected
+                  ? `LIVE TLS${connectionStatus.active_host ? ` · ${connectionStatus.active_host.split(':')[0]}` : ''}`
+                  : isDemoMode
+                  ? 'DEMO (MOCK)'
+                  : 'OFFLINE'}
+              </span>
+            </button>
 
-          {/* Night mode toggle */}
-          <button
-            onClick={() => useDeckStore.getState().toggleDimmed()}
-            className="p-1.5 rounded bg-white/[0.04] text-[#71717A] hover:text-[#EDEDF2] transition-colors"
-            title="Night Mode Dim-to-Clock (Press D)"
-          >
-            <Moon className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </header>
+            {/* Budget HUD toggle */}
+            <button
+              onClick={() => setShowBudgetHud(!showBudgetHud)}
+              className={`p-1.5 rounded transition-colors ${
+                showBudgetHud
+                  ? 'bg-[#B07BFF] text-white'
+                  : 'bg-white/[0.04] text-[#71717A] hover:text-[#EDEDF2]'
+              }`}
+              title="Toggle Section 10 Budget HUD"
+            >
+              <Gauge className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Night mode toggle */}
+            <button
+              onClick={() => useDeckStore.getState().toggleDimmed()}
+              className="p-1.5 rounded bg-white/[0.04] text-[#71717A] hover:text-[#EDEDF2] transition-colors"
+              title="Night Mode Dim-to-Clock (Press D)"
+            >
+              <Moon className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </header>
+      )}
 
       {/* Main 12x6 Grid Viewport with Swipeable Pages */}
-      <main className="flex-1 p-2 md:p-3 relative overflow-hidden">
+      <main className={`flex-1 relative overflow-hidden ${theme.name === 'glass' && activePage === 0 ? 'p-0' : 'p-2 md:p-3'}`}>
         {/* Live Wallpaper Background Engine */}
         <LiveWallpaper
           manifest={wallpaperManifest}
@@ -483,48 +486,65 @@ export default function App() {
                 if (info.offset.x < -60) useDeckStore.getState().nextPage();
                 else if (info.offset.x > 60) useDeckStore.getState().prevPage();
               }}
-              className="w-full h-full grid grid-cols-12 grid-rows-6 gap-2"
+              className="w-full h-full"
             >
-              {/* PAGE 1: SYSTEM OVERVIEW */}
-              {/* Clock (col 1..4, row 1..2) */}
-              <div className="col-span-4 row-span-2">
-                <DigitalClockContainer />
-              </div>
+              {theme.name === 'glass' ? (
+                <GlassDashboardView
+                  onOpenOverview={() => setShowOverview(true)}
+                  onOpenPairing={() => {
+                    if (isDemoMode) {
+                      setIsDemoMode(false);
+                    } else {
+                      setShowPairModal(true);
+                    }
+                  }}
+                  connected={connected}
+                  hostName={connectionStatus.active_host ? connectionStatus.active_host.split(':')[0] : 'HOME-PC'}
+                />
+              ) : (
+                <div className="w-full h-full grid grid-cols-12 grid-rows-6 gap-2">
+                  {/* PAGE 1: SYSTEM OVERVIEW */}
+                  {/* Clock (col 1..4, row 1..2) */}
+                  <div className="col-span-4 row-span-2">
+                    <DigitalClockContainer />
+                  </div>
 
-              {/* CPU Radial Spring Gauge (col 5..7, row 1..4) */}
-              <div className="col-span-3 row-span-4">
-                <CpuGaugeContainer />
-              </div>
+                  {/* CPU Radial Spring Gauge (col 5..7, row 1..4) */}
+                  <div className="col-span-3 row-span-4">
+                    <CpuGaugeContainer />
+                  </div>
 
-              {/* CPU Usage Tile (col 8..10, row 1..2) */}
-              <div className="col-span-3 row-span-2">
-                <CpuTileContainer />
-              </div>
+                  {/* CPU Usage Tile (col 8..10, row 1..2) */}
+                  <div className="col-span-3 row-span-2">
+                    <CpuTileContainer />
+                  </div>
 
-              {/* RAM Usage Tile (col 11..12, row 1..2) */}
-              <div className="col-span-2 row-span-2">
-                <RamTileContainer />
-              </div>
+                  {/* RAM Usage Tile (col 11..12, row 1..2) */}
+                  <div className="col-span-2 row-span-2">
+                    <RamTileContainer />
+                  </div>
 
-              {/* History Sparkline Chart (col 8..12, row 3..6) */}
-              <div className="col-span-5 row-span-4">
-                <CpuHistoryContainer />
-              </div>
+                  {/* History Sparkline Chart (col 8..12, row 3..6) */}
+                  <div className="col-span-5 row-span-4">
+                    <CpuHistoryContainer />
+                  </div>
 
-              {/* Memory & Disks (col 1..4, row 3..4) */}
-              <div className="col-span-4 row-span-2">
-                <MemoryDisksContainer />
-              </div>
+                  {/* Memory & Disks (col 1..4, row 3..4) */}
+                  <div className="col-span-4 row-span-2">
+                    <MemoryDisksContainer />
+                  </div>
 
-              {/* Network Throughput I/O (col 1..4, row 5..6) */}
-              <div className="col-span-4 row-span-2">
-                <NetworkIoContainer />
-              </div>
+                  {/* Network Throughput I/O (col 1..4, row 5..6) */}
+                  <div className="col-span-4 row-span-2">
+                    <NetworkIoContainer />
+                  </div>
 
-              {/* System Uptime (col 5..7, row 5..6) */}
-              <div className="col-span-3 row-span-2">
-                <SystemUptimeContainer />
-              </div>
+                  {/* System Uptime (col 5..7, row 5..6) */}
+                  <div className="col-span-3 row-span-2">
+                    <SystemUptimeContainer />
+                  </div>
+                </div>
+              )}
             </motion.div>
           )}
 

@@ -118,6 +118,19 @@ export const BUILTIN_WALLPAPERS: Record<string, WallpaperManifest> = {
     },
   },
 
+  'glass-bokeh': {
+    id: 'glass-bokeh',
+    name: 'Warm Studio Bokeh (Glass Companion)',
+    type: 'static-ken-burns',
+    version: '1.0.0',
+    targetFps: 12,
+    dim: 0.88,
+    blur: 0,
+    assets: {
+      image: '/glass-bokeh-bg.jpg',
+    },
+  },
+
   'static-void': {
     id: 'static-void',
     name: 'Void Minimal Star Drift',

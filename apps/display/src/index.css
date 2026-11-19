@@ -37,3 +37,30 @@ body {
 .border-hairline {
   border-color: rgba(255, 255, 255, 0.08);
 }
+
+/* Glassmorphism theme utility classes */
+.theme-glass .glass-panel,
+.theme-glass .bg-\[\#0E0E14\],
+.theme-glass .bg-\[\#0D0D14\],
+.theme-glass .bg-\[\#09090D\] {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+}
+
+.theme-glass .border-white\/\[0\.08\] {
+  border-color: rgba(255, 255, 255, 0.14) !important;
+}
+
+.theme-glass .text-\[\#7C5CFF\] {
+  color: #B07BFF !important;
+}
+
+.theme-glass .bg-\[\#7C5CFF\] {
+  background-color: #B07BFF !important;
+}
+
+.theme-glass .border-\[\#7C5CFF\] {
+  border-color: #B07BFF !important;
+}
