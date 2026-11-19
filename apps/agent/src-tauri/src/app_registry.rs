@@ -413,6 +413,116 @@ impl AppRegistryManager {
             },
         );
 
+        // 10. YouTube preset
+        default_apps.insert(
+            "youtube".to_string(),
+            AppDefinition {
+                id: "youtube".to_string(),
+                name: "YouTube".to_string(),
+                match_rules: AppMatchRules {
+                    exe_names: vec![],
+                    window_class: None,
+                    title_regex: None,
+                },
+                launch: AppLaunchConfig {
+                    path: "https://www.youtube.com".to_string(),
+                    args: vec![],
+                },
+                quick_launches: vec![],
+                actions: vec!["focus".to_string(), "launch".to_string()],
+                title_parser: None,
+                icon: "Video".to_string(),
+            },
+        );
+
+        // 11. Steam preset
+        default_apps.insert(
+            "steam".to_string(),
+            AppDefinition {
+                id: "steam".to_string(),
+                name: "Steam".to_string(),
+                match_rules: AppMatchRules {
+                    exe_names: vec!["steam.exe".to_string(), "steamwebhelper.exe".to_string()],
+                    window_class: None,
+                    title_regex: None,
+                },
+                launch: AppLaunchConfig {
+                    path: "steam://open/main".to_string(),
+                    args: vec![],
+                },
+                quick_launches: vec![],
+                actions: vec!["focus".to_string(), "launch".to_string()],
+                title_parser: None,
+                icon: "Gamepad2".to_string(),
+            },
+        );
+
+        // 12. Claude CLI preset
+        default_apps.insert(
+            "claude".to_string(),
+            AppDefinition {
+                id: "claude".to_string(),
+                name: "Claude CLI".to_string(),
+                match_rules: AppMatchRules {
+                    exe_names: vec!["claude.exe".to_string()],
+                    window_class: None,
+                    title_regex: Some(".*claude.*".to_string()),
+                },
+                launch: AppLaunchConfig {
+                    path: "cmd".to_string(),
+                    args: vec!["/C".to_string(), "start".to_string(), "cmd".to_string(), "/K".to_string(), "claude".to_string()],
+                },
+                quick_launches: vec![],
+                actions: vec!["focus".to_string(), "launch".to_string()],
+                title_parser: None,
+                icon: "Terminal".to_string(),
+            },
+        );
+
+        // 13. GitHub preset
+        default_apps.insert(
+            "github".to_string(),
+            AppDefinition {
+                id: "github".to_string(),
+                name: "GitHub".to_string(),
+                match_rules: AppMatchRules {
+                    exe_names: vec!["githubdesktop.exe".to_string()],
+                    window_class: None,
+                    title_regex: None,
+                },
+                launch: AppLaunchConfig {
+                    path: "https://github.com".to_string(),
+                    args: vec![],
+                },
+                quick_launches: vec![],
+                actions: vec!["focus".to_string(), "launch".to_string()],
+                title_parser: None,
+                icon: "GitBranch".to_string(),
+            },
+        );
+
+        // 14. Settings preset
+        default_apps.insert(
+            "settings".to_string(),
+            AppDefinition {
+                id: "settings".to_string(),
+                name: "Settings".to_string(),
+                match_rules: AppMatchRules {
+                    exe_names: vec!["systemsettings.exe".to_string()],
+                    window_class: None,
+                    title_regex: None,
+                },
+                launch: AppLaunchConfig {
+                    path: "ms-settings:".to_string(),
+                    args: vec![],
+                },
+                quick_launches: vec![],
+                actions: vec!["focus".to_string(), "launch".to_string()],
+                title_parser: None,
+                icon: "Settings".to_string(),
+            },
+        );
+
         let mgr = Arc::new(Self {
             apps: Arc::new(RwLock::new(default_apps)),
             runtime_states: Arc::new(RwLock::new(HashMap::new())),
@@ -753,9 +863,27 @@ impl AppRegistryManager {
     ) -> Result<String, String> {
         let app = {
             let map = self.apps.read().await;
-            map.get(app_id)
-                .cloned()
-                .ok_or_else(|| format!("App '{}' not found in registry", app_id))?
+            if let Some(a) = map.get(app_id) {
+                a.clone()
+            } else {
+                AppDefinition {
+                    id: app_id.to_string(),
+                    name: app_id.to_string(),
+                    match_rules: AppMatchRules {
+                        exe_names: vec![format!("{}.exe", app_id), app_id.to_string()],
+                        window_class: None,
+                        title_regex: None,
+                    },
+                    launch: AppLaunchConfig {
+                        path: app_id.to_string(),
+                        args: vec![],
+                    },
+                    quick_launches: vec![],
+                    actions: vec!["focus".to_string(), "launch".to_string()],
+                    title_parser: None,
+                    icon: "App".to_string(),
+                }
+            }
         };
 
         log::info!(
@@ -773,6 +901,10 @@ impl AppRegistryManager {
             "focus" => {
                 #[cfg(target_os = "windows")]
                 {
+                    if app.match_rules.exe_names.is_empty() {
+                        Self::spawn_app_process(&app)?;
+                        return Ok(format!("Launched {}", app.name));
+                    }
                     let (windows, _) = Self::collect_windows();
                     let sys = self.system.read().await;
                     let mut target_hwnd = None;
