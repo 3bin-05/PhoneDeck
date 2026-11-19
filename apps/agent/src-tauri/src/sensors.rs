@@ -53,6 +53,7 @@ pub struct TelemetryHub {
     pub park_notifier: Arc<Notify>,
     pub telemetry_tx: broadcast::Sender<Vec<u8>>,
     pub is_running: Arc<AtomicBool>,
+    pub current_state: Arc<tokio::sync::RwLock<TelemetryState>>,
 }
 
 impl TelemetryHub {
@@ -64,8 +65,18 @@ impl TelemetryHub {
             park_notifier: Arc::new(Notify::new()),
             telemetry_tx: tx,
             is_running: Arc::new(AtomicBool::new(true)),
+            current_state: Arc::new(tokio::sync::RwLock::new(TelemetryState::new())),
         };
         (hub, rx)
+    }
+
+    pub async fn get_current_state(&self) -> TelemetryState {
+        self.current_state.read().await.clone()
+    }
+
+    pub async fn set_current_state(&self, state: TelemetryState) {
+        let mut guard = self.current_state.write().await;
+        *guard = state;
     }
 
     pub async fn update_client_subscriptions(&self, subscribed_field_ids: Vec<u16>) {
@@ -89,12 +100,17 @@ impl TelemetryHub {
 
     pub fn push_custom_metric(&self, field_id: u16, val: protocol::MetricValue) {
         let mut updates = std::collections::BTreeMap::new();
-        updates.insert(field_id, val);
+        updates.insert(field_id, val.clone());
         let delta = protocol::TelemetryDelta { updates };
         let envelope = protocol::Envelope::telemetry(0, delta);
         if let Ok(bytes) = protocol::to_msgpack(&envelope) {
             let _ = self.telemetry_tx.send(bytes);
         }
+        let state_clone = self.current_state.clone();
+        tauri::async_runtime::spawn(async move {
+            let mut guard = state_clone.write().await;
+            guard.metrics.insert(field_id, val);
+        });
     }
 }
 
@@ -110,16 +126,45 @@ pub fn spawn_sampler_thread(
         let mut disks = Disks::new_with_refreshed_list();
         let mut networks = Networks::new_with_refreshed_list();
 
+        // Baseline refresh
+        sys.refresh_cpu_all();
+        sys.refresh_memory_specifics(MemoryRefreshKind::nothing().with_ram());
+        disks.refresh(true);
+        networks.refresh(true);
+
+        // Pre-populate initial metrics into hub.current_state immediately
+        {
+            let mut init_state = TelemetryState::new();
+            let cpu_total = sys.global_cpu_usage() as f64;
+            init_state.set(FieldId::CpuTotal, (cpu_total * 10.0).round() as u64);
+            if let Some(first_cpu) = sys.cpus().first() {
+                init_state.set(FieldId::CpuFreqMhz, first_cpu.frequency() as u32);
+            }
+            init_state.set(FieldId::RamUsedBytes, sys.used_memory());
+            init_state.set(FieldId::RamTotalBytes, sys.total_memory());
+            let mut used_d = 0u64;
+            let mut total_d = 0u64;
+            for d in &disks {
+                total_d += d.total_space();
+                used_d += d.total_space().saturating_sub(d.available_space());
+            }
+            init_state.set(FieldId::DiskUsedBytes, used_d);
+            init_state.set(FieldId::DiskTotalBytes, total_d);
+            init_state.set(FieldId::UptimeSeconds, System::uptime());
+
+            hub.set_current_state(init_state).await;
+        }
+
         let deadbands = DeadbandConfig::default();
         let mut prev_state = TelemetryState::new();
         let mut seq = 1u64;
 
-        // Adaptive polling timers per sensor category
-        let mut cpu_sensor = AdaptiveSensorState::new(500, 4000);
-        let mut ram_sensor = AdaptiveSensorState::new(1000, 5000);
-        let mut net_sensor = AdaptiveSensorState::new(1000, 4000);
-        let mut disk_sensor = AdaptiveSensorState::new(3000, 10000);
-        let mut uptime_sensor = AdaptiveSensorState::new(1000, 2000);
+        // Adaptive polling timers: 500ms min, 1000ms max for real-time responsiveness
+        let mut cpu_sensor = AdaptiveSensorState::new(500, 1000);
+        let mut ram_sensor = AdaptiveSensorState::new(500, 1000);
+        let mut net_sensor = AdaptiveSensorState::new(1000, 2000);
+        let mut disk_sensor = AdaptiveSensorState::new(3000, 5000);
+        let mut uptime_sensor = AdaptiveSensorState::new(1000, 1000);
 
         while hub.is_running.load(Ordering::SeqCst) {
             // 1. PARKING CHECK: If client_count == 0 or no active subscribers, park thread!
@@ -218,6 +263,7 @@ pub fn spawn_sampler_thread(
 
             // 7. Compute deadband-filtered delta
             if any_polled {
+                hub.set_current_state(curr_state.clone()).await;
                 let delta = compute_delta(&prev_state, &curr_state, &deadbands);
 
                 // Update adaptive sensor backoffs based on whether values exceeded deadbands

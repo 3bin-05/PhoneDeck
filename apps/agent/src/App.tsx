@@ -52,6 +52,18 @@ interface AdbStatus {
   reverse_active: boolean;
 }
 
+interface SystemMetrics {
+  cpu_pct: number;
+  cpu_freq_mhz: number;
+  ram_used_bytes: number;
+  ram_total_bytes: number;
+  net_in_bytes_sec: number;
+  net_out_bytes_sec: number;
+  disk_used_bytes: number;
+  disk_total_bytes: number;
+  uptime_secs: number;
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<
     'status' | 'devices' | 'ai' | 'editor' | 'apps' | 'shortcuts' | 'rules' | 'ambient' | 'settings'
@@ -64,6 +76,7 @@ export default function App() {
   const [adbStatus, setAdbStatus] = useState<AdbStatus | null>(null);
   const [installingApk, setInstallingApk] = useState(false);
   const [adbMessage, setAdbMessage] = useState<string | null>(null);
+  const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
 
   const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
@@ -205,12 +218,29 @@ export default function App() {
     }
   };
 
+  const fetchMetrics = async () => {
+    if (isTauri) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const res = await invoke<SystemMetrics>('get_system_metrics');
+        setMetrics(res);
+      } catch (err) {
+        console.error('Failed to get system metrics:', err);
+      }
+    }
+  };
+
   useEffect(() => {
     fetchPairingStatus();
     fetchPairedDevices();
     fetchAdbStatus();
+    fetchMetrics();
     const adbInterval = setInterval(fetchAdbStatus, 3000);
-    return () => clearInterval(adbInterval);
+    const metricsInterval = setInterval(fetchMetrics, 1000);
+    return () => {
+      clearInterval(adbInterval);
+      clearInterval(metricsInterval);
+    };
   }, []);
 
   useEffect(() => {
@@ -291,9 +321,14 @@ export default function App() {
                   <Cpu className="w-3.5 h-3.5 text-[#7C5CFF]" />
                 </div>
                 <div className="mt-4 font-mono text-4xl font-light tracking-tight tabular-nums text-[#EDEDF2]">
-                  12<span className="text-xl text-[#71717A] font-normal">%</span>
+                  {metrics ? metrics.cpu_pct.toFixed(1) : '12'}
+                  <span className="text-xl text-[#71717A] font-normal">%</span>
                 </div>
-                <div className="mt-2 text-[11px] font-mono text-[#71717A]">4.2 GHz · 42°C</div>
+                <div className="mt-2 text-[11px] font-mono text-[#71717A]">
+                  {metrics && metrics.cpu_freq_mhz > 0
+                    ? `${metrics.cpu_freq_mhz} MHz · Realtime`
+                    : '4.2 GHz · Realtime'}
+                </div>
               </div>
 
               <div className="p-4 rounded-xl bg-[#08080C] border border-white/[0.08] flex flex-col justify-between">
@@ -302,9 +337,16 @@ export default function App() {
                   <HardDrive className="w-3.5 h-3.5 text-[#7C5CFF]" />
                 </div>
                 <div className="mt-4 font-mono text-4xl font-light tracking-tight tabular-nums text-[#EDEDF2]">
-                  14.2<span className="text-xl text-[#71717A] font-normal">/32G</span>
+                  {metrics ? (metrics.ram_used_bytes / 1073741824).toFixed(1) : '14.2'}
+                  <span className="text-xl text-[#71717A] font-normal">
+                    /{metrics && metrics.ram_total_bytes > 0 ? (metrics.ram_total_bytes / 1073741824).toFixed(0) : '32'}G
+                  </span>
                 </div>
-                <div className="mt-2 text-[11px] font-mono text-[#71717A]">44% utilized</div>
+                <div className="mt-2 text-[11px] font-mono text-[#71717A]">
+                  {metrics && metrics.ram_total_bytes > 0
+                    ? `${Math.round((metrics.ram_used_bytes / metrics.ram_total_bytes) * 100)}% utilized`
+                    : '44% utilized'}
+                </div>
               </div>
 
               <div className="p-4 rounded-xl bg-[#08080C] border border-white/[0.08] flex flex-col justify-between">
@@ -313,7 +355,10 @@ export default function App() {
                   <Radio className="w-3.5 h-3.5 text-[#00E599]" />
                 </div>
                 <div className="mt-4 font-mono text-4xl font-light tracking-tight tabular-nums text-[#00E599]">
-                  0.18<span className="text-xl text-[#71717A] font-normal">KB/s</span>
+                  {metrics
+                    ? ((metrics.net_in_bytes_sec + metrics.net_out_bytes_sec) / 1024).toFixed(2)
+                    : '0.18'}
+                  <span className="text-xl text-[#71717A] font-normal">KB/s</span>
                 </div>
                 <div className="mt-2 text-[11px] font-mono text-[#71717A]">Budget: &lt; 1.0 KB/s</div>
               </div>

@@ -377,3 +377,90 @@ pub async fn adb_launch_phone_app(
     state.adb.launch_app(&target_device)?;
     Ok(format!("Launched PhoneDeck Display on {}", target_device))
 }
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SystemMetricsPayload {
+    pub cpu_pct: f64,
+    pub cpu_freq_mhz: u32,
+    pub ram_used_bytes: u64,
+    pub ram_total_bytes: u64,
+    pub net_in_bytes_sec: u64,
+    pub net_out_bytes_sec: u64,
+    pub disk_used_bytes: u64,
+    pub disk_total_bytes: u64,
+    pub uptime_secs: u64,
+}
+
+#[tauri::command]
+pub async fn get_system_metrics(
+    state: State<'_, AgentAppState>,
+) -> Result<SystemMetricsPayload, String> {
+    let snapshot = state.telemetry_hub.get_current_state().await;
+
+    let cpu_raw = snapshot
+        .metrics
+        .get(&protocol::fields::FieldId::CpuTotal.id())
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+    let cpu_pct = cpu_raw as f64 / 10.0;
+
+    let cpu_freq_mhz = snapshot
+        .metrics
+        .get(&protocol::fields::FieldId::CpuFreqMhz.id())
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as u32;
+
+    let ram_used_bytes = snapshot
+        .metrics
+        .get(&protocol::fields::FieldId::RamUsedBytes.id())
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+
+    let ram_total_bytes = snapshot
+        .metrics
+        .get(&protocol::fields::FieldId::RamTotalBytes.id())
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+
+    let net_in_bytes_sec = snapshot
+        .metrics
+        .get(&protocol::fields::FieldId::NetInBytesSec.id())
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+
+    let net_out_bytes_sec = snapshot
+        .metrics
+        .get(&protocol::fields::FieldId::NetOutBytesSec.id())
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+
+    let disk_used_bytes = snapshot
+        .metrics
+        .get(&protocol::fields::FieldId::DiskUsedBytes.id())
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+
+    let disk_total_bytes = snapshot
+        .metrics
+        .get(&protocol::fields::FieldId::DiskTotalBytes.id())
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+
+    let uptime_secs = snapshot
+        .metrics
+        .get(&protocol::fields::FieldId::UptimeSeconds.id())
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+
+    Ok(SystemMetricsPayload {
+        cpu_pct,
+        cpu_freq_mhz,
+        ram_used_bytes,
+        ram_total_bytes,
+        net_in_bytes_sec,
+        net_out_bytes_sec,
+        disk_used_bytes,
+        disk_total_bytes,
+        uptime_secs,
+    })
+}

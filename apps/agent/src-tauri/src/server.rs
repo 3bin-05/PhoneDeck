@@ -346,11 +346,23 @@ async fn handle_auth_and_stream_socket(mut socket: WebSocket, state: ServerState
 
     // Client authenticated: Register with TelemetryHub
     state.telemetry_hub.add_client();
-    // Default subscription on connect: CPU, Frequency, RAM used/total, Network in/out, Uptime
+    // Default subscription on connect: CPU, Frequency, RAM used/total, Network in/out, Disk, Uptime
     state
         .telemetry_hub
-        .update_client_subscriptions(vec![1, 2, 4, 5, 10, 11, 14])
+        .update_client_subscriptions(vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14])
         .await;
+
+    // Send immediate full snapshot (keyframe) to the newly connected client
+    let current_snapshot = state.telemetry_hub.get_current_state().await;
+    if !current_snapshot.metrics.is_empty() {
+        let delta = protocol::TelemetryDelta {
+            updates: current_snapshot.metrics,
+        };
+        let envelope = protocol::Envelope::telemetry(0, delta);
+        if let Ok(bytes) = protocol::to_msgpack(&envelope) {
+            let _ = socket.send(Message::Binary(bytes.into())).await;
+        }
+    }
 
     let (mut sender, mut receiver) = socket.split();
     let mut rx = state.telemetry_hub.telemetry_tx.subscribe();

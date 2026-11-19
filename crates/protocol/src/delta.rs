@@ -74,19 +74,19 @@ pub struct DeadbandConfig {
 impl Default for DeadbandConfig {
     fn default() -> Self {
         let mut thresholds = BTreeMap::new();
-        // CPU usage: |Δ| ≥ 1.0% (10 in 0.1% fixed-point)
-        thresholds.insert(FieldId::CpuTotal.id(), 10);
-        // CPU temp: |Δ| ≥ 1.0°C (10 in 0.1°C fixed-point)
-        thresholds.insert(FieldId::CpuTempC.id(), 10);
-        // GPU usage: |Δ| ≥ 1.0%
-        thresholds.insert(FieldId::GpuUsage.id(), 10);
-        // GPU temp: |Δ| ≥ 1.0°C
-        thresholds.insert(FieldId::GpuTempC.id(), 10);
-        // RAM: |Δ| ≥ 32 MB
-        thresholds.insert(FieldId::RamUsedBytes.id(), 33_554_432);
-        // Network throughput: |Δ| ≥ 10 KB/s
-        thresholds.insert(FieldId::NetInBytesSec.id(), 10_240);
-        thresholds.insert(FieldId::NetOutBytesSec.id(), 10_240);
+        // CPU usage: |Δ| ≥ 0.5% (5 in 0.1% fixed-point)
+        thresholds.insert(FieldId::CpuTotal.id(), 5);
+        // CPU temp: |Δ| ≥ 0.5°C (5 in 0.1°C fixed-point)
+        thresholds.insert(FieldId::CpuTempC.id(), 5);
+        // GPU usage: |Δ| ≥ 0.5%
+        thresholds.insert(FieldId::GpuUsage.id(), 5);
+        // GPU temp: |Δ| ≥ 0.5°C
+        thresholds.insert(FieldId::GpuTempC.id(), 5);
+        // RAM: |Δ| ≥ 8 MB for responsive real-time sync
+        thresholds.insert(FieldId::RamUsedBytes.id(), 8_388_608);
+        // Network throughput: |Δ| ≥ 2 KB/s
+        thresholds.insert(FieldId::NetInBytesSec.id(), 2_048);
+        thresholds.insert(FieldId::NetOutBytesSec.id(), 2_048);
 
         Self { thresholds }
     }

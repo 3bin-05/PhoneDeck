@@ -29,6 +29,8 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
+use tauri::menu::{MenuBuilder, MenuItemBuilder};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::Manager;
 use tls::TlsManager;
 use tokio_rustls::TlsAcceptor;
@@ -51,6 +53,7 @@ pub struct AgentAppState {
     pub updater: Arc<AgentUpdaterManager>,
     pub hub: Arc<AgentHub>,
     pub adb: Arc<adb::AdbManager>,
+    pub telemetry_hub: Arc<TelemetryHub>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -167,6 +170,7 @@ pub fn run() {
                 updater: updater.clone(),
                 hub: hub.clone(),
                 adb: adb_mgr.clone(),
+                telemetry_hub: telemetry_hub.clone(),
             };
 
             // Start LAN-only WSS server (axum + rustls)
@@ -205,7 +209,70 @@ pub fn run() {
 
             app.manage(app_state);
 
+            // Register system tray icon on desktop
+            #[cfg(desktop)]
+            {
+                let show_item = MenuItemBuilder::with_id("show", "Show Phone Deck").build(app)?;
+                let quit_item = MenuItemBuilder::with_id("quit", "Quit Phone Deck").build(app)?;
+                let tray_menu = MenuBuilder::new(app)
+                    .item(&show_item)
+                    .separator()
+                    .item(&quit_item)
+                    .build()?;
+
+                let mut tray_builder = TrayIconBuilder::new()
+                    .tooltip("Phone Deck Agent (Background)")
+                    .menu(&tray_menu)
+                    .show_menu_on_left_click(false)
+                    .on_menu_event(|app, event| {
+                        match event.id().as_ref() {
+                            "show" => {
+                                if let Some(window) = app.get_webview_window("main") {
+                                    let _ = window.show();
+                                    let _ = window.unminimize();
+                                    let _ = window.set_focus();
+                                }
+                            }
+                            "quit" => {
+                                app.exit(0);
+                            }
+                            _ => {}
+                        }
+                    })
+                    .on_tray_icon_event(|tray, event| {
+                        if let TrayIconEvent::Click {
+                            button: MouseButton::Left,
+                            button_state: MouseButtonState::Up,
+                            ..
+                        } = event
+                        {
+                            let app = tray.app_handle();
+                            if let Some(window) = app.get_webview_window("main") {
+                                if window.is_visible().unwrap_or(false) {
+                                    let _ = window.hide();
+                                } else {
+                                    let _ = window.show();
+                                    let _ = window.unminimize();
+                                    let _ = window.set_focus();
+                                }
+                            }
+                        }
+                    });
+
+                if let Some(icon) = app.default_window_icon() {
+                    tray_builder = tray_builder.icon(icon.clone());
+                }
+
+                let _ = tray_builder.build(app)?;
+            }
+
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_pairing_status,
@@ -238,7 +305,8 @@ pub fn run() {
             commands::mark_changelog_viewed,
             commands::get_adb_status,
             commands::adb_install_phone_apk,
-            commands::adb_launch_phone_app
+            commands::adb_launch_phone_app,
+            commands::get_system_metrics
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");
