@@ -16,7 +16,6 @@ import {
   Sparkles,
   Layers,
 } from 'lucide-react';
-import { PairingView } from './PairingView';
 import { GlassDashboardView } from './GlassDashboardView';
 import { useUpdaterStore } from './updaterStore';
 import {
@@ -205,7 +204,7 @@ export default function App() {
   const ambientState = useAmbientStore((s) => s.state);
 
   // Part A: Ambient-Light "Night Clock" Mode (Pure #000000 OLED, phone clock, heartbeat-only telemetry)
-  if (ambientState === 'dark' || ambientState === 'locked_dark' || isDimmed) {
+  if (isDimmed || ambientState === 'dark' || ambientState === 'locked_dark') {
     return (
       <NightClockView
         onTap={() => {
@@ -216,52 +215,6 @@ export default function App() {
           if (isDimmed) useDeckStore.getState().setDimmed(false);
           useAmbientStore.getState().handleDoubleTap();
         }}
-      />
-    );
-  }
-
-  // Part B: Unpaired / Connecting Setup Screen (never fake mock data on cold start)
-  if (!isDemoMode && (!connectionStatus.paired || (!connectionStatus.connected && !connected))) {
-    return (
-      <PairingView
-        paired={connectionStatus.paired}
-        connected={connected || connectionStatus.connected}
-        agentId={connectionStatus.agent_id}
-        activeHost={connectionStatus.active_host}
-        error={connectionStatus.error}
-        onPair={async (uri) => {
-          if (isTauri) {
-            try {
-              const { invoke } = await import('@tauri-apps/api/core');
-              const res = await invoke<ConnectionStatus>('pair_with_uri', {
-                pairUri: uri,
-                deviceName: 'Phone Deck Display (Mobile)',
-              });
-              setConnectionStatus(res);
-              return res.paired;
-            } catch (err: any) {
-              setConnectionStatus((prev) => ({ ...prev, error: String(err) }));
-              return false;
-            }
-          } else {
-            setConnectionStatus({ paired: true, connected: true, agent_id: 'phone-deck-pc' });
-            return true;
-          }
-        }}
-        onUnpair={async () => {
-          if (isTauri) {
-            try {
-              const { invoke } = await import('@tauri-apps/api/core');
-              await invoke('unpair_device');
-              setConnectionStatus({ paired: false, connected: false });
-            } catch (err) {
-              console.error('Unpair error:', err);
-            }
-          } else {
-            setConnectionStatus({ paired: false, connected: false });
-          }
-        }}
-        onEnterDemo={() => setIsDemoMode(true)}
       />
     );
   }
